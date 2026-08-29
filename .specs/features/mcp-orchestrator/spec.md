@@ -96,9 +96,14 @@ Para uma aplicação consumir capacidades expostas por MCP servers (arquivos, Gi
     "code": "STRING_CONSTANT",
     "message": "human-readable"
   },
-  "trace": { "...": "mesmo formato acima, sempre presente" }
+  "trace": {
+    "...": "mesmo formato acima, sempre presente",
+    "finish_reason": "error"
+  }
 }
 ```
+
+**Nota (adicionada na Fase 3 — Design):** `trace.finish_reason` aceita um quarto valor, `"error"`, exclusivo de respostas 4xx/5xx — os três valores originais (`completed`, `no_suitable_server`, `max_iterations_reached`) só ocorrem em HTTP 200. Quando `finish_reason = "error"`, o código específico do erro vive em `error.code` (catálogo abaixo), nunca em `finish_reason`. Enum completo: `"completed" | "no_suitable_server" | "max_iterations_reached" | "error"`.
 
 **Códigos de erro estáveis (catálogo mínimo da v1):**
 
