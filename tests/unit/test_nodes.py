@@ -6,7 +6,7 @@ from collections.abc import Sequence
 import pytest
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
-from orchestrator.graph.nodes import make_agent_node, make_prepare_node
+from orchestrator.graph.nodes import make_agent_node, make_prepare_node, make_route_after_agent
 from orchestrator.graph.prompts import ToolCatalogEntry, build_system_prompt
 from orchestrator.llm.provider import LlmProviderError
 
@@ -67,3 +67,45 @@ async def test_agent_propagates_llm_provider_error() -> None:
 
     with pytest.raises(LlmProviderError):
         await agent({"messages": [HumanMessage(content="t")]})
+
+
+def _state_with_last_message(message: AIMessage, iterations: int, used_tools: list[str]) -> dict:
+    return {"messages": [message], "iterations": iterations, "used_tools": used_tools}
+
+
+def test_route_after_agent_goes_to_guard_when_tool_calls_pending_and_under_the_limit() -> None:
+    route = make_route_after_agent(max_iterations=5)
+    message = AIMessage(content="", tool_calls=[{"name": "read_file", "args": {}, "id": "1"}])
+
+    result = route(_state_with_last_message(message, iterations=0, used_tools=[]))
+
+    assert result == "guard"
+
+
+def test_route_after_agent_goes_to_max_iterations_reached_at_the_limit() -> None:
+    route = make_route_after_agent(max_iterations=5)
+    message = AIMessage(content="", tool_calls=[{"name": "read_file", "args": {}, "id": "1"}])
+    state = _state_with_last_message(message, iterations=5, used_tools=["filesystem.read_file"])
+
+    result = route(state)
+
+    assert result == "max_iterations_reached"
+
+
+def test_route_after_agent_goes_to_no_suitable_server_when_no_tool_calls_and_none_used() -> None:
+    route = make_route_after_agent(max_iterations=5)
+    message = AIMessage(content="resposta direta", tool_calls=[])
+
+    result = route(_state_with_last_message(message, iterations=0, used_tools=[]))
+
+    assert result == "no_suitable_server"
+
+
+def test_route_after_agent_goes_to_completed_when_no_tool_calls_and_some_used() -> None:
+    route = make_route_after_agent(max_iterations=5)
+    message = AIMessage(content="resposta final", tool_calls=[])
+    state = _state_with_last_message(message, iterations=1, used_tools=["filesystem.read_file"])
+
+    result = route(state)
+
+    assert result == "completed"

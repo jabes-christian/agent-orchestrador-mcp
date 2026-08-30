@@ -7,6 +7,7 @@ tempo de build do grafo (catálogo de tools, modelo de chat já `bind_tools`-ado
 """
 
 from collections.abc import Awaitable, Callable
+from typing import Literal
 
 from langchain_core.language_models import LanguageModelInput
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
@@ -17,6 +18,8 @@ from orchestrator.graph.state import OrchestratorState
 from orchestrator.llm.provider import ainvoke
 
 NodeFn = Callable[[OrchestratorState], Awaitable[dict[str, object]]]
+RouteDecision = Literal["guard", "completed", "no_suitable_server", "max_iterations_reached"]
+RouteFn = Callable[[OrchestratorState], RouteDecision]
 
 
 def make_prepare_node(tool_catalog: list[ToolCatalogEntry]) -> NodeFn:
@@ -50,3 +53,25 @@ def make_agent_node(model: Runnable[LanguageModelInput, AIMessage]) -> NodeFn:
         return {"messages": [response]}
 
     return agent
+
+
+def make_route_after_agent(max_iterations: int) -> RouteFn:
+    """Fabrica `route_after_agent`: a tabela-verdade dos 4 caminhos pós-`agent` (design.md ->
+    Secao 1.4), exaustiva e determinística -- nenhum quinto caminho implícito. `max_iterations`
+    é injetado por `graph/builder.py` (T24) a partir de `Settings.max_react_iterations`; este
+    módulo nunca lê `Settings` diretamente."""
+
+    def route_after_agent(state: OrchestratorState) -> RouteDecision:
+        last_message = state["messages"][-1]
+        tool_calls = last_message.tool_calls if isinstance(last_message, AIMessage) else []
+
+        if tool_calls:
+            if state["iterations"] < max_iterations:
+                return "guard"
+            return "max_iterations_reached"
+
+        if state["used_tools"]:
+            return "completed"
+        return "no_suitable_server"
+
+    return route_after_agent

@@ -658,10 +658,10 @@ T35 → T36
 
 **Done when**:
 
-- [ ] Os 4 caminhos da tabela-verdade do Design §1.4 estão implementados e cobertos
-- [ ] Nenhum quinto caminho implícito é criado (roteamento é exaustivo e determinístico)
-- [ ] Gate check passa: `python -m pytest tests/unit -q`
-- [ ] Test count: um teste por caminho da tabela-verdade (4 no mínimo) passa
+- [x] Os 4 caminhos da tabela-verdade do Design §1.4 estão implementados e cobertos
+- [x] Nenhum quinto caminho implícito é criado (roteamento é exaustivo e determinístico)
+- [x] Gate check passa: `python -m pytest tests/unit -q`
+- [x] Test count: um teste por caminho da tabela-verdade (4 no mínimo) passa
 
 **Tests**: unit
 **Gate**: quick
