@@ -339,26 +339,28 @@ Reporta status agregado do gateway e por-server.
 
 ## Requirement Traceability
 
-| Requirement ID | Story | Phase | Status |
-| --- | --- | --- | --- |
-| MCPO-01 | P1: Resolver tarefa em linguagem natural via MCP | Design | Pending |
-| MCPO-02 | P1: Descoberta de servers e tools por configuração | Design | Pending |
-| MCPO-03 | P1: Loop ReAct limitado com múltiplas tools | Design | Pending |
-| MCPO-04 | P1: Trace de decisão auditável | Design | Pending |
-| MCPO-05 | P1: Tratamento de erro e timeout de MCP server | Design | Pending |
-| MCPO-06 | P1: Autenticação por API key | Design | Pending |
-| MCPO-07 | P1: Stack completo via docker-compose | Design | Pending |
-| MCPO-08 | P2: Allowlist de tools de escrita | Design | Pending |
-| MCPO-09 | P2: Resposta direta quando nenhum server é adequado | Design | Pending |
-| MCPO-10 | P2: Suíte de avaliação de roteamento | Design | Pending |
-| MCPO-11 | P3: Health check com estado dos MCP servers | Design | Pending |
-| MCPO-12 | P3: Limite de custo/tokens por request | Design | Pending |
+| Requirement ID | Story | Phase | Status | Tasks |
+| --- | --- | --- | --- | --- |
+| MCPO-01 | P1: Resolver tarefa em linguagem natural via MCP | Design | In Tasks | T11, T18, T19, T23, T25 |
+| MCPO-02 | P1: Descoberta de servers e tools por configuração | Design | In Tasks | T6, T8, T14, T15, T18 |
+| MCPO-03 | P1: Loop ReAct limitado com múltiplas tools | Design | In Tasks | T3, T16, T20, T21, T23, T24 |
+| MCPO-04 | P1: Trace de decisão auditável | Design | In Tasks | T4, T5, T11, T13, T16, T21, T25 |
+| MCPO-05 | P1: Tratamento de erro e timeout de MCP server | Design | In Tasks | T3, T7, T13, T17, T19, T21, T25 |
+| MCPO-06 | P1: Autenticação por API key | Design | In Tasks | T12, T25 |
+| MCPO-07 | P1: Stack completo via docker-compose | Design | In Tasks | T1, T2, T3, T27-T34 |
+| MCPO-08 | P2: Allowlist de tools de escrita | Design | In Tasks | T9, T10, T22 |
+| MCPO-09 | P2: Resposta direta quando nenhum server é adequado | Design | In Tasks | T20, T23 |
+| MCPO-10 | P2: Suíte de avaliação de roteamento | Design | In Tasks | T35, T36 |
+| MCPO-11 | P3: Health check com estado dos MCP servers | Design | In Tasks | T26 |
+| MCPO-12 | P3: Limite de custo/tokens por request | Design | Deferred | Nenhuma — adiado para v1.1, ver `STATE.md` → AD-006 |
 
 **ID format:** `MCPO-NN`
 
-**Status values:** Pending → In Design → In Tasks → Implementing → Verified
+**Status values:** Pending → In Design → In Tasks → Implementing → Verified. `Deferred` é um estado
+terminal fora desse fluxo, usado quando um requisito é formalmente adiado para uma versão futura
+em vez de implementado nesta feature.
 
-**Coverage:** 12 total, 0 mapped to tasks, 12 unmapped ⚠️ (esperado — Tasks ainda não foi executada)
+**Coverage:** 12 total, 11 mapped to tasks, 1 deferred (MCPO-12 — AD-006)
 
 ---
 
