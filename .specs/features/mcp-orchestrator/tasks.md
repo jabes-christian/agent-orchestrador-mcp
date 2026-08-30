@@ -511,10 +511,10 @@ T35 → T36
 
 #### T15: Implementar rota GET /servers
 
-**What**: Implementar a rota `GET /servers`, que expõe o estado atual dos MCP servers descobertos pelo registry.
+**What**: Implementar a rota `GET /servers`, que expõe o estado atual dos MCP servers descobertos pelo registry. Esta rota é o único ponto que combina `registry.servers()` (estrutura: nome, status, tools) com `policy.is_write()` (classificação real de escrita) para produzir o `write: bool` correto por tool — `registry.py` não conhece `tool_policy.yaml` e expõe um placeholder `write: False` documentado in loco (ver `.specs/STATE.md` → AD-007).
 **Where**: `src/orchestrator/api/routes_servers.py`
-**Depends on**: T14
-**Reuses**: app factory (T14), `registry.servers()` (T8)
+**Depends on**: T14, T10
+**Reuses**: app factory (T14), `registry.servers()` (T8), `policy.is_write()` (T10) para sobrescrever o `write:bool` real por tool
 **Requirement**: MCPO-02 AC3
 
 **Tools**:
@@ -525,8 +525,9 @@ T35 → T36
 **Done when**:
 
 - [ ] `GET /servers` retorna a lista de servers com seu estado de descoberta
+- [ ] `tools[].write` reflete a classificação real de `policy.is_write()`, não o placeholder de `registry.py`
 - [ ] Gate check passa: `python -m pytest tests/integration -q`
-- [ ] Test count: teste de integração cobrindo o happy path de `GET /servers` passa
+- [ ] Test count: teste de integração cobrindo o happy path de `GET /servers` (incluindo ao menos uma tool de escrita com `write: true`) passa
 
 **Tests**: integration
 **Gate**: full
@@ -1196,7 +1197,7 @@ então arestas cross-phase estão fora do escopo de cada diagrama individual.
 | T12 | T3 (cross-phase) | — (cross-phase) | ✅ Match |
 | T13 | T7 (cross-phase), T11 | `T11 → T13` | ✅ Match |
 | T14 | T8 (cross-phase), T13 | `T13 → T14` | ✅ Match |
-| T15 | T14 | `T14 → T15` | ✅ Match |
+| T15 | T14, T10 (cross-phase, corrigido no Execute — ver AD-007) | `T14 → T15` | ✅ Match |
 | T16 | T5 (cross-phase) | — (cross-phase) | ✅ Match |
 | T17 | T3, T7 (ambas cross-phase) | — (cross-phase) | ✅ Match |
 | T18 | T16 | `T16 → T18` | ✅ Match |
