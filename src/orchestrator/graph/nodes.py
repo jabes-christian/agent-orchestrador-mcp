@@ -13,7 +13,7 @@ from typing import Literal, cast
 
 import httpx
 from langchain_core.language_models import LanguageModelInput
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import Runnable
 from langchain_core.tools import BaseTool
 
@@ -44,6 +44,7 @@ def make_prepare_node(tool_catalog: list[ToolCatalogEntry]) -> NodeFn:
             "used_tools": [],
             "finish_reason": None,
             "error": None,
+            "result": None,
         }
 
     return prepare
@@ -242,3 +243,66 @@ def make_guard_node(policy: ToolPolicy, server_by_tool: dict[str, str]) -> NodeF
         return {"steps": steps, "error": error}
 
     return guard
+
+
+def _extract_text(message: AIMessage) -> str:
+    """Extrai o texto de uma `AIMessage`, cobrindo tanto `content: str` quanto o formato de
+    content blocks (`content: list[str | dict]`) que alguns modelos servidos via OpenRouter
+    retornam em vez de string pura (AD-003 -- `ChatOpenRouter` proxeia providers variados)."""
+    content = message.content
+    if isinstance(content, str):
+        return content
+    parts: list[str] = []
+    for block in content:
+        if isinstance(block, str):
+            parts.append(block)
+        elif isinstance(block, dict) and isinstance(block.get("text"), str):
+            parts.append(block["text"])
+    return "".join(parts)
+
+
+def _last_ai_text(messages: list[AnyMessage]) -> str:
+    """Varre `messages` de trás pra frente e devolve o texto da última `AIMessage` com
+    conteúdo real. Necessário porque a última `AIMessage` do caminho `max_iterations_reached`
+    tipicamente só carrega `tool_calls`, com `content` vazio -- nesse caso o "melhor resultado
+    parcial disponível" (MCPO-03 AC2) é o texto da resposta anterior do agente, não uma string
+    vazia."""
+    for message in reversed(messages):
+        if isinstance(message, AIMessage):
+            text = _extract_text(message)
+            if text:
+                return text
+    return ""
+
+
+def make_finalize_node(route_after_agent: RouteFn) -> NodeFn:
+    """Fabrica o nó `finalize`: único nó do grafo autorizado a escrever `finish_reason` e
+    `result` (design.md -> nó `finalize`).
+
+    Reusa a mesma função `route_after_agent` (T20) usada na aresta condicional que trouxe o
+    grafo até aqui pelo caminho de sucesso -- como o estado não muda entre a decisão de
+    roteamento e a chegada em `finalize`, reavaliar a mesma tabela-verdade produz exatamente o
+    mesmo veredito (`completed`/`no_suitable_server`/`max_iterations_reached`), sem duplicar a
+    lógica de decisão.
+
+    `result` é derivado de `messages`, não um campo espelhando `messages[-1].content` -- ver
+    `_last_ai_text`. Isso mantém `POST /tasks` (T25) livre de conhecer a forma interna das
+    mensagens do LangChain (`str` vs. content blocks, `AIMessage` com `tool_calls` e `content`
+    vazio); a rota só lê `state["result"]`, uma string simples.
+
+    Caminho de erro: `error` já chega preenchido por quem detectou a falha (`guard`/`tools`) --
+    `finalize` só normaliza `finish_reason = "error"` nesse caso, sem tocar em `error` nem
+    computar `result`."""
+
+    async def finalize(state: OrchestratorState) -> dict[str, object]:
+        if state["error"] is not None:
+            return {"finish_reason": "error"}
+
+        reason = route_after_agent(state)
+        assert reason != "guard", (
+            "route_after_agent nao deveria retornar 'guard' em finalize -- bug de wiring em "
+            "graph/builder.py (T24)"
+        )
+        return {"finish_reason": reason, "result": _last_ai_text(state["messages"])}
+
+    return finalize

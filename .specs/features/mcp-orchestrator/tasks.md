@@ -739,11 +739,11 @@ T35 → T36
 
 **Done when**:
 
-- [ ] `finalize` é o único nó que escreve `finish_reason` e `result`
-- [ ] Caminho de sucesso produz `result` coerente com a decisão do agente
-- [ ] Caminho de erro produz o envelope de erro completo (com `trace`)
-- [ ] Gate check passa: `python -m pytest tests/unit -q`
-- [ ] Test count: testes cobrindo finalize em caminho de sucesso e em caminho de erro passam
+- [x] `finalize` é o único nó que escreve `finish_reason` e `result`
+- [x] Caminho de sucesso produz `result` coerente com a decisão do agente
+- [x] Caminho de erro produz o envelope de erro completo (com `trace`)
+- [x] Gate check passa: `python -m pytest tests/unit -q`
+- [x] Test count: testes cobrindo finalize em caminho de sucesso e em caminho de erro passam
 
 **Tests**: unit
 **Gate**: quick

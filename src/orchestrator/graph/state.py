@@ -35,3 +35,8 @@ class OrchestratorState(TypedDict):
     finish_reason: FinishReason | None
     error: ErrorInfo | None
     started_at: float
+    # Escrito só por `graph.nodes.finalize` (T23); extraído do texto da ultima `AIMessage` com
+    # conteudo, nao um espelho literal de `messages[-1].content` -- ver o docstring de
+    # `make_finalize_node` para o motivo (caminho `max_iterations_reached` pode terminar numa
+    # `AIMessage` so com `tool_calls`, `content` vazio).
+    result: str | None

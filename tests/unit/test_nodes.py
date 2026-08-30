@@ -10,6 +10,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 
 from orchestrator.graph.nodes import (
     make_agent_node,
+    make_finalize_node,
     make_guard_node,
     make_prepare_node,
     make_route_after_agent,
@@ -60,6 +61,7 @@ async def test_prepare_initializes_the_rest_of_the_state() -> None:
     assert result["used_tools"] == []
     assert result["finish_reason"] is None
     assert result["error"] is None
+    assert result["result"] is None
 
 
 async def test_agent_records_the_llm_decision_in_state() -> None:
@@ -378,3 +380,65 @@ async def test_guard_preserves_prior_steps_when_blocking() -> None:
 
     assert result["steps"][0] == prior_step
     assert result["steps"][1]["step"] == 2
+
+
+def _final_state(**overrides: object) -> dict:
+    base = {
+        "messages": [AIMessage(content="resposta final", tool_calls=[])],
+        "iterations": 0,
+        "used_tools": [],
+        "error": None,
+    }
+    base.update(overrides)
+    return base
+
+
+async def test_finalize_returns_completed_with_the_agents_final_text() -> None:
+    finalize = make_finalize_node(make_route_after_agent(max_iterations=5))
+
+    result = await finalize(_final_state(used_tools=["filesystem.read_file"]))
+
+    assert result == {"finish_reason": "completed", "result": "resposta final"}
+
+
+async def test_finalize_returns_no_suitable_server_when_no_tool_was_used() -> None:
+    finalize = make_finalize_node(make_route_after_agent(max_iterations=5))
+
+    result = await finalize(_final_state(used_tools=[]))
+
+    assert result == {"finish_reason": "no_suitable_server", "result": "resposta final"}
+
+
+async def test_finalize_falls_back_to_the_last_non_empty_ai_text_at_max_iterations() -> None:
+    # A ultima AIMessage tem tool_calls pendentes e content vazio -- comportamento tipico do
+    # caminho max_iterations_reached (route_after_agent so chega aqui com tool_calls != []).
+    finalize = make_finalize_node(make_route_after_agent(max_iterations=5))
+    prior_answer = AIMessage(content="progresso ate agora: 2 de 3 arquivos lidos")
+    pending_call = AIMessage(content="", tool_calls=[{"name": "read_file", "args": {}, "id": "1"}])
+
+    result = await finalize(_final_state(messages=[prior_answer, pending_call], iterations=5))
+
+    assert result == {
+        "finish_reason": "max_iterations_reached",
+        "result": "progresso ate agora: 2 de 3 arquivos lidos",
+    }
+
+
+async def test_finalize_extracts_text_from_content_blocks() -> None:
+    # Alguns modelos servidos via OpenRouter respondem com `content` como lista de content
+    # blocks em vez de string pura (AD-003).
+    finalize = make_finalize_node(make_route_after_agent(max_iterations=5))
+    message = AIMessage(content=[{"type": "text", "text": "resposta em blocos"}])
+
+    result = await finalize(_final_state(messages=[message], used_tools=["filesystem.read_file"]))
+
+    assert result == {"finish_reason": "completed", "result": "resposta em blocos"}
+
+
+async def test_finalize_returns_error_when_state_has_an_error() -> None:
+    finalize = make_finalize_node(make_route_after_agent(max_iterations=5))
+    error = {"code": "TOOL_NOT_ALLOWED", "message": "bloqueada"}
+
+    result = await finalize(_final_state(error=error))
+
+    assert result == {"finish_reason": "error"}
