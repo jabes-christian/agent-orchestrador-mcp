@@ -684,12 +684,12 @@ T35 → T36
 
 **Done when**:
 
-- [ ] Execução de tool respeita o timeout configurado
-- [ ] Retry acontece exatamente 1 vez, e só para falha de transporte
-- [ ] Cada execução (sucesso ou falha) vira um item em `steps[]`
-- [ ] `iterations` incrementa a cada passagem pelo nó
-- [ ] Gate check passa: `python -m pytest tests/unit -q`
-- [ ] Test count: testes cobrindo sucesso, timeout, falha de transporte com retry e falha de aplicação sem retry passam
+- [x] Execução de tool respeita o timeout configurado
+- [x] Retry acontece exatamente 1 vez, e só para falha de transporte
+- [x] Cada execução (sucesso ou falha) vira um item em `steps[]`
+- [x] `iterations` incrementa a cada passagem pelo nó
+- [x] Gate check passa: `python -m pytest tests/unit -q`
+- [x] Test count: testes cobrindo sucesso, timeout, falha de transporte com retry e falha de aplicação sem retry passam
 
 **Tests**: unit
 **Gate**: quick

@@ -1,12 +1,19 @@
-"""Testes unitários de orchestrator.graph.nodes -- nós `prepare` e `agent` (MCPO-01, MCPO-05
-AC5)."""
+"""Testes unitários de orchestrator.graph.nodes -- nós `prepare`, `agent` e `tools`, e
+`route_after_agent` (MCPO-01, MCPO-03 AC1, MCPO-04 AC2, MCPO-05 AC1/AC2/AC3, MCPO-05 AC5)."""
 
+import asyncio
 from collections.abc import Sequence
 
+import httpx
 import pytest
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 
-from orchestrator.graph.nodes import make_agent_node, make_prepare_node, make_route_after_agent
+from orchestrator.graph.nodes import (
+    make_agent_node,
+    make_prepare_node,
+    make_route_after_agent,
+    make_tools_node,
+)
 from orchestrator.graph.prompts import ToolCatalogEntry, build_system_prompt
 from orchestrator.llm.provider import LlmProviderError
 
@@ -109,3 +116,171 @@ def test_route_after_agent_goes_to_completed_when_no_tool_calls_and_some_used() 
     result = route(state)
 
     assert result == "completed"
+
+
+_CALL = {"name": "read_file", "args": {"path": "a.txt"}, "id": "call_1"}
+
+
+def _state_with_pending_call(**overrides: object) -> dict:
+    base = {
+        "messages": [AIMessage(content="", tool_calls=[_CALL])],
+        "iterations": 0,
+        "steps": [],
+        "used_tools": [],
+    }
+    base.update(overrides)
+    return base
+
+
+class _ScriptedTool:
+    """Dublê de `BaseTool`: uma resposta ou exceção por tentativa, na ordem do script."""
+
+    def __init__(self, script: list[ToolMessage | Exception]) -> None:
+        self._script = list(script)
+        self.calls = 0
+
+    async def ainvoke(self, call: dict) -> ToolMessage:
+        outcome = self._script[self.calls]
+        self.calls += 1
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+
+class _SlowTool:
+    """Dublê de `BaseTool` que demora `delay` segundos a responder -- prova que o timeout
+    configurado é de fato respeitado (`asyncio.wait_for` cancela antes do fim do sleep)."""
+
+    def __init__(self, delay: float) -> None:
+        self._delay = delay
+        self.calls = 0
+
+    async def ainvoke(self, call: dict) -> ToolMessage:
+        self.calls += 1
+        await asyncio.sleep(self._delay)
+        return ToolMessage(content="nunca alcancado", status="success", tool_call_id=call["id"])
+
+
+def _success_message(content: str = "ok") -> ToolMessage:
+    return ToolMessage(content=content, status="success", tool_call_id=_CALL["id"])
+
+
+def _error_message(content: str = "arquivo nao encontrado") -> ToolMessage:
+    return ToolMessage(content=content, status="error", tool_call_id=_CALL["id"])
+
+
+async def test_tools_node_records_a_success_step_and_used_tool() -> None:
+    tool = _ScriptedTool([_success_message()])
+    tools_node = make_tools_node(
+        tools_by_name={"read_file": tool}, server_by_tool={"read_file": "filesystem"}, timeout_s=5.0
+    )
+
+    result = await tools_node(_state_with_pending_call())
+
+    steps = result["steps"]
+    assert steps[-1]["status"] == "success"
+    assert steps[-1]["attempt"] == 1
+    assert steps[-1]["server"] == "filesystem"
+    assert steps[-1]["tool"] == "read_file"
+    assert result["used_tools"] == ["filesystem.read_file"]
+    assert result["iterations"] == 1
+    assert result["error"] is None
+    assert tool.calls == 1
+
+
+async def test_tools_node_retries_once_on_timeout_then_succeeds() -> None:
+    tool = _ScriptedTool([TimeoutError("timeout"), _success_message()])
+    tools_node = make_tools_node(
+        tools_by_name={"read_file": tool}, server_by_tool={"read_file": "filesystem"}, timeout_s=5.0
+    )
+
+    result = await tools_node(_state_with_pending_call())
+
+    assert tool.calls == 2
+    assert result["steps"][-1]["status"] == "success"
+    assert result["steps"][-1]["attempt"] == 2
+    assert result["error"] is None
+
+
+async def test_tools_node_returns_mcp_tool_timeout_after_retry_exhausted() -> None:
+    tool = _ScriptedTool([TimeoutError("timeout 1"), TimeoutError("timeout 2")])
+    tools_node = make_tools_node(
+        tools_by_name={"read_file": tool}, server_by_tool={"read_file": "filesystem"}, timeout_s=5.0
+    )
+
+    result = await tools_node(_state_with_pending_call())
+
+    assert tool.calls == 2
+    assert result["steps"][-1]["status"] == "failure"
+    assert result["steps"][-1]["attempt"] == 2
+    assert result["error"] == {"code": "MCP_TOOL_TIMEOUT", "message": "timeout 2"}
+
+
+async def test_tools_node_returns_mcp_server_unavailable_after_connection_error_persists() -> None:
+    tool = _ScriptedTool(
+        [httpx.ConnectError("conexao recusada"), httpx.ConnectError("conexao recusada")]
+    )
+    tools_node = make_tools_node(
+        tools_by_name={"read_file": tool}, server_by_tool={"read_file": "filesystem"}, timeout_s=5.0
+    )
+
+    result = await tools_node(_state_with_pending_call())
+
+    assert result["steps"][-1]["status"] == "failure"
+    assert result["error"] == {"code": "MCP_SERVER_UNAVAILABLE", "message": "conexao recusada"}
+
+
+async def test_tools_node_respects_the_configured_timeout() -> None:
+    tool = _SlowTool(delay=1.0)
+    tools_node = make_tools_node(
+        tools_by_name={"read_file": tool},
+        server_by_tool={"read_file": "filesystem"},
+        timeout_s=0.02,
+    )
+
+    result = await tools_node(_state_with_pending_call())
+
+    assert tool.calls == 2
+    assert result["error"]["code"] == "MCP_TOOL_TIMEOUT"
+
+
+async def test_tools_node_records_application_failure_without_retry() -> None:
+    tool = _ScriptedTool([_error_message()])
+    tools_node = make_tools_node(
+        tools_by_name={"read_file": tool}, server_by_tool={"read_file": "filesystem"}, timeout_s=5.0
+    )
+
+    result = await tools_node(_state_with_pending_call())
+
+    assert tool.calls == 1
+    assert result["steps"][-1]["status"] == "failure"
+    assert result["steps"][-1]["attempt"] == 1
+    assert result["used_tools"] == []
+    assert result["error"] is None
+    assert result["messages"] == [tool._script[0]]
+
+
+async def test_tools_node_preserves_prior_steps_and_increments_iterations() -> None:
+    tool = _ScriptedTool([_success_message()])
+    tools_node = make_tools_node(
+        tools_by_name={"read_file": tool}, server_by_tool={"read_file": "filesystem"}, timeout_s=5.0
+    )
+    prior_step = {
+        "step": 1,
+        "server": "github",
+        "tool": "get_issue",
+        "arguments": {},
+        "duration_ms": 10,
+        "attempt": 1,
+        "status": "success",
+    }
+    state = _state_with_pending_call(
+        steps=[prior_step], used_tools=["github.get_issue"], iterations=1
+    )
+
+    result = await tools_node(state)
+
+    assert result["steps"][0] == prior_step
+    assert result["steps"][1]["step"] == 2
+    assert result["used_tools"] == ["github.get_issue", "filesystem.read_file"]
+    assert result["iterations"] == 2

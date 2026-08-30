@@ -6,16 +6,21 @@ tempo de build do grafo (catálogo de tools, modelo de chat já `bind_tools`-ado
 `llm.provider`; este módulo nunca importa nenhum dos dois diretamente (AD-005, STATE.md).
 """
 
+import asyncio
+import time
 from collections.abc import Awaitable, Callable
-from typing import Literal
+from typing import Literal, cast
 
+import httpx
 from langchain_core.language_models import LanguageModelInput
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import Runnable
+from langchain_core.tools import BaseTool
 
 from orchestrator.graph.prompts import ToolCatalogEntry, build_system_prompt
-from orchestrator.graph.state import OrchestratorState
+from orchestrator.graph.state import ErrorInfo, OrchestratorState
 from orchestrator.llm.provider import ainvoke
+from orchestrator.observability.trace import TraceStep
 
 NodeFn = Callable[[OrchestratorState], Awaitable[dict[str, object]]]
 RouteDecision = Literal["guard", "completed", "no_suitable_server", "max_iterations_reached"]
@@ -75,3 +80,116 @@ def make_route_after_agent(max_iterations: int) -> RouteFn:
         return "no_suitable_server"
 
     return route_after_agent
+
+
+def make_tools_node(
+    tools_by_name: dict[str, BaseTool],
+    server_by_tool: dict[str, str],
+    timeout_s: float,
+) -> NodeFn:
+    """Fabrica o nó `tools`: executa cada `tool_call` pendente da última `AIMessage` via
+    `BaseTool.ainvoke`, com timeout `MCP_TOOL_TIMEOUT_S` e 1 retry restrito a falha de
+    transporte (`TimeoutError`, `ConnectionError`, `httpx.TransportError` -- MCPO-05 AC1).
+    Falha de aplicação (a tool respondeu com erro de negócio, já convertida pelo próprio
+    LangChain em `ToolMessage(status="error")`) nunca é retentada.
+
+    `tools_by_name` e `server_by_tool` são resolvidos por `graph/builder.py` (T24) a partir do
+    `mcp_client.registry`; este módulo nunca importa `registry` diretamente (AD-005).
+
+    Uma falha de transporte que persiste após o retry aborta o processamento do restante da
+    leva e preenche `error` no estado retornado, em vez de levantar exceção -- assim os `steps`
+    já acumulados nesta chamada do nó não se perdem (`finalize`, T23, decide o desfecho HTTP a
+    partir do estado, não de uma exceção).
+
+    SPEC_DEVIATION: design.md Secao 1.2 desenha `tools` com uma única aresta de saída (de volta
+    para `agent`). Levantar exceção aqui (como `agent` faz para `LLM_PROVIDER_ERROR`) perderia
+    os `steps` desta chamada do nó, que LangGraph só mescla ao estado a partir do que um nó
+    *retorna*. Reason: `graph/builder.py` (T24) precisa de uma aresta condicional extra depois
+    de `tools` (`error` preenchido -> `finalize`), não desenhada no diagrama original."""
+
+    async def tools_node(state: OrchestratorState) -> dict[str, object]:
+        last_message = state["messages"][-1]
+        tool_calls = last_message.tool_calls if isinstance(last_message, AIMessage) else []
+
+        steps: list[TraceStep] = list(state["steps"])
+        used_tools = list(state["used_tools"])
+        tool_messages: list[ToolMessage] = []
+        error: ErrorInfo | None = None
+
+        for call in tool_calls:
+            tool_name = call["name"]
+            server = server_by_tool.get(tool_name, "unknown")
+            tool = tools_by_name[tool_name]
+
+            result: ToolMessage | None = None
+            transport_exc: Exception | None = None
+            duration_ms = 0
+            attempt = 1
+            for attempt in (1, 2):  # noqa: B007 -- lido apos o loop, na montagem do step
+                started = time.monotonic()
+                try:
+                    invoked = await asyncio.wait_for(tool.ainvoke(call), timeout=timeout_s)
+                except (TimeoutError, ConnectionError, httpx.TransportError) as exc:
+                    duration_ms = int((time.monotonic() - started) * 1000)
+                    transport_exc = exc
+                    continue
+                duration_ms = int((time.monotonic() - started) * 1000)
+                result = cast(ToolMessage, invoked)
+                transport_exc = None
+                break
+
+            if transport_exc is not None:
+                steps.append(
+                    {
+                        "step": len(steps) + 1,
+                        "server": server,
+                        "tool": tool_name,
+                        "arguments": call["args"],
+                        "duration_ms": duration_ms,
+                        "attempt": attempt,
+                        "status": "failure",
+                    }
+                )
+                error = (
+                    {
+                        "code": "MCP_TOOL_TIMEOUT",
+                        "message": str(transport_exc) or "a chamada de tool excedeu o timeout",
+                    }
+                    if isinstance(transport_exc, TimeoutError)
+                    else {
+                        "code": "MCP_SERVER_UNAVAILABLE",
+                        "message": str(transport_exc) or "o mcp server nao esta disponivel",
+                    }
+                )
+                break
+
+            assert result is not None
+            status: Literal["success", "failure"] = (
+                "success" if result.status == "success" else "failure"
+            )
+            steps.append(
+                {
+                    "step": len(steps) + 1,
+                    "server": server,
+                    "tool": tool_name,
+                    "arguments": call["args"],
+                    "duration_ms": duration_ms,
+                    "attempt": attempt,
+                    "status": status,
+                }
+            )
+            if status == "success":
+                identifier = f"{server}.{tool_name}"
+                if identifier not in used_tools:
+                    used_tools.append(identifier)
+            tool_messages.append(result)
+
+        return {
+            "messages": tool_messages,
+            "steps": steps,
+            "used_tools": used_tools,
+            "iterations": state["iterations"] + 1,
+            "error": error,
+        }
+
+    return tools_node
