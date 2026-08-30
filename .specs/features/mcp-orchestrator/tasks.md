@@ -631,11 +631,11 @@ T35 → T36
 
 **Done when**:
 
-- [ ] `prepare` inicializa `OrchestratorState` a partir da `task` recebida
-- [ ] `agent` chama o LLM com o prompt montado por T18 e grava a decisão no estado
-- [ ] Falha do provider propaga como `LLM_PROVIDER_ERROR` (via T17)
-- [ ] Gate check passa: `python -m pytest tests/unit -q`
-- [ ] Test count: testes cobrindo `prepare` e `agent` (com LLM roteirizado/dublê) passam
+- [x] `prepare` inicializa `OrchestratorState` a partir da `task` recebida
+- [x] `agent` chama o LLM com o prompt montado por T18 e grava a decisão no estado
+- [x] Falha do provider propaga como `LLM_PROVIDER_ERROR` (via T17)
+- [x] Gate check passa: `python -m pytest tests/unit -q`
+- [x] Test count: testes cobrindo `prepare` e `agent` (com LLM roteirizado/dublê) passam
 
 **Tests**: unit
 **Gate**: quick
