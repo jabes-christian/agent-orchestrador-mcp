@@ -418,10 +418,10 @@ T35 → T36
 
 **Done when**:
 
-- [ ] `TaskRequest` rejeita `task` vazio ou acima de 4000 caracteres
-- [ ] `TaskResponse`, `ErrorResponse` e `Trace` têm todos os campos exigidos pela spec
-- [ ] Gate check passa: `python -m pytest tests/unit -q`
-- [ ] Test count: testes cobrindo validação de `TaskRequest` (incluindo o edge case `INVALID_TASK`) e serialização dos demais schemas passam
+- [x] `TaskRequest` rejeita `task` vazio ou acima de 4000 caracteres
+- [x] `TaskResponse`, `ErrorResponse` e `Trace` têm todos os campos exigidos pela spec
+- [x] Gate check passa: `python -m pytest tests/unit -q`
+- [x] Test count: testes cobrindo validação de `TaskRequest` (incluindo o edge case `INVALID_TASK`) e serialização dos demais schemas passam
 
 **Tests**: unit
 **Gate**: quick
@@ -444,10 +444,10 @@ T35 → T36
 
 **Done when**:
 
-- [ ] Request sem `X-API-Key` ou com valor incorreto é rejeitada
-- [ ] Request com `X-API-Key` correto passa pela dependency
-- [ ] Gate check passa: `python -m pytest tests/unit -q`
-- [ ] Test count: testes cobrindo header ausente, incorreto e correto passam
+- [x] Request sem `X-API-Key` ou com valor incorreto é rejeitada
+- [x] Request com `X-API-Key` correto passa pela dependency
+- [x] Gate check passa: `python -m pytest tests/unit -q`
+- [x] Test count: testes cobrindo header ausente, incorreto e correto passam
 
 **Tests**: unit
 **Gate**: quick
@@ -470,11 +470,11 @@ T35 → T36
 
 **Done when**:
 
-- [ ] Cada um dos 8 códigos de erro do catálogo tem um handler mapeado
-- [ ] Toda resposta de erro inclui `trace`, mesmo em falhas antes de qualquer execução de tool
-- [ ] `finish_reason="error"` está presente quando o AC exige
-- [ ] Gate check passa: `python -m pytest tests/unit -q`
-- [ ] Test count: testes cobrindo os 8 códigos de erro e a presença de `trace`/`finish_reason` passam
+- [x] Cada um dos 8 códigos de erro do catálogo tem um handler mapeado
+- [x] Toda resposta de erro inclui `trace`, mesmo em falhas antes de qualquer execução de tool
+- [x] `finish_reason="error"` está presente quando o AC exige
+- [x] Gate check passa: `python -m pytest tests/unit -q`
+- [x] Test count: testes cobrindo os 8 códigos de erro e a presença de `trace`/`finish_reason` passam
 
 **Tests**: unit
 **Gate**: quick
@@ -497,11 +497,11 @@ T35 → T36
 
 **Done when**:
 
-- [ ] `discover()` do registry roda durante o `lifespan` de subida da app
-- [ ] Server declarado em `servers.yaml` que não resolve faz a subida falhar com log de erro explícito
-- [ ] Exception handlers de T13 estão registrados na app
-- [ ] Gate check passa: `python -m pytest tests/integration -q`
-- [ ] Test count: testes de integração cobrindo subida com sucesso e subida com server inválido passam
+- [x] `discover()` do registry roda durante o `lifespan` de subida da app
+- [x] Server declarado em `servers.yaml` que não resolve faz a subida falhar com log de erro explícito
+- [x] Exception handlers de T13 estão registrados na app
+- [x] Gate check passa: `python -m pytest tests/integration -q`
+- [x] Test count: testes de integração cobrindo subida com sucesso e subida com server inválido passam
 
 **Tests**: integration
 **Gate**: full
@@ -524,10 +524,10 @@ T35 → T36
 
 **Done when**:
 
-- [ ] `GET /servers` retorna a lista de servers com seu estado de descoberta
-- [ ] `tools[].write` reflete a classificação real de `policy.is_write()`, não o placeholder de `registry.py`
-- [ ] Gate check passa: `python -m pytest tests/integration -q`
-- [ ] Test count: teste de integração cobrindo o happy path de `GET /servers` (incluindo ao menos uma tool de escrita com `write: true`) passa
+- [x] `GET /servers` retorna a lista de servers com seu estado de descoberta
+- [x] `tools[].write` reflete a classificação real de `policy.is_write()`, não o placeholder de `registry.py`
+- [x] Gate check passa: `python -m pytest tests/integration -q`
+- [x] Test count: teste de integração cobrindo o happy path de `GET /servers` (incluindo ao menos uma tool de escrita com `write: true`) passa
 
 **Tests**: integration
 **Gate**: full
@@ -552,9 +552,9 @@ T35 → T36
 
 **Done when**:
 
-- [ ] `OrchestratorState` contém todos os campos que os nós do Design precisam ler/escrever
-- [ ] `TraceStep` e `ErrorInfo` têm os campos exigidos pelo contrato de trace/erro da spec
-- [ ] Gate check passa: `ruff check . && ruff format --check . && mypy src`
+- [x] `OrchestratorState` contém todos os campos que os nós do Design precisam ler/escrever
+- [x] `TraceStep` e `ErrorInfo` têm os campos exigidos pelo contrato de trace/erro da spec
+- [x] Gate check passa: `ruff check . && ruff format --check . && mypy src`
 
 **Tests**: none
 **Gate**: build
@@ -577,10 +577,10 @@ T35 → T36
 
 **Done when**:
 
-- [ ] Chamada ao LLM bem-sucedida retorna a resposta esperada pelo grafo
-- [ ] Falha do provider (timeout, erro HTTP, etc.) é convertida em `LLM_PROVIDER_ERROR`
-- [ ] Gate check passa: `python -m pytest tests/unit -q`
-- [ ] Test count: testes cobrindo chamada bem-sucedida e cada falha de provider mapeada passam
+- [x] Chamada ao LLM bem-sucedida retorna a resposta esperada pelo grafo
+- [x] Falha do provider (timeout, erro HTTP, etc.) é convertida em `LLM_PROVIDER_ERROR`
+- [x] Gate check passa: `python -m pytest tests/unit -q`
+- [x] Test count: testes cobrindo chamada bem-sucedida e cada falha de provider mapeada passam
 
 **Tests**: unit
 **Gate**: quick
@@ -603,10 +603,10 @@ T35 → T36
 
 **Done when**:
 
-- [ ] O prompt gerado lista exatamente as tools presentes no catálogo passado, sem nome hardcoded no código
-- [ ] Adicionar/remover uma tool do catálogo de entrada muda o prompt sem alterar este arquivo
-- [ ] Gate check passa: `python -m pytest tests/unit -q`
-- [ ] Test count: testes cobrindo a montagem do prompt com catálogos diferentes passam
+- [x] O prompt gerado lista exatamente as tools presentes no catálogo passado, sem nome hardcoded no código
+- [x] Adicionar/remover uma tool do catálogo de entrada muda o prompt sem alterar este arquivo
+- [x] Gate check passa: `python -m pytest tests/unit -q`
+- [x] Test count: testes cobrindo a montagem do prompt com catálogos diferentes passam
 
 **Tests**: unit
 **Gate**: quick
