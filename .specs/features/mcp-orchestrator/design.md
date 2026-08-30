@@ -468,7 +468,7 @@ Em todos os 8 casos, o `trace` (mesmo parcial) acompanha a resposta, conforme MC
 
 | Concern | Location | Impact | Mitigation |
 | --- | --- | --- | --- |
-| Caminho exato do binário Go dentro da imagem `ghcr.io/github/github-mcp-server` (para o `MCP_STDIO_COMMAND` do shim) não foi verificado nesta fase — a doc mostra `docker run ... github-mcp-server stdio`, mas não confirma o entrypoint quando a imagem é usada como base de outra imagem (multi-stage) | `docker/github/Dockerfile` | Primeira task de Execute que builda esse container pode falhar por caminho incorreto | Confirmar o entrypoint/caminho do binário como primeiro passo da task correspondente na Fase 4; fallback documentado: `go build -o github-mcp-server ./cmd/github-mcp-server` a partir do código-fonte oficial, copiado num estágio builder |
+| **Resolvido em T1 (Fase 5).** Caminho confirmado: `/server/github-mcp-server`, tag pinada `v1.11.0` — igual à suposição original do Dockerfile, verificado via `docker inspect` (Entrypoint) + extração do binário (`docker create`/`docker cp`, ELF64 Go estático). Achado novo: a imagem é distroless/scratch (sem `sh`/`ls`/`busybox`) — o comando de discovery de `tasks.md` baseado em shell não roda contra ela (exit 127), método alternativo documentado em §4 | `docker/github/Dockerfile` | Nenhum para T30 (o `COPY --from=bin` do multi-stage não precisa de shell na imagem de origem); risco residual só se um dia se precisar rodar um comando interativo/healthcheck de shell *dentro* do container `github` final — o shim (Python) já não depende disso | Fallback de build a partir do código-fonte (`go build -o github-mcp-server ./cmd/github-mcp-server`) permanece documentado como plano B caso uma tag futura mova o binário de lugar; não foi necessário nesta checagem |
 | Fixtures de avaliação (modo CI) podem ficar estagnadas: são gravadas uma vez e não refletem mudanças no prompt de decisão | `tests/eval/fixtures/` | Acurácia reportada em CI deixa de refletir o comportamento real do LLM assim que `graph/prompts.py` muda, mascarando regressão | AD-004 (`STATE.md`): regravar as fixtures na mesma task/commit que altera `prompts.py`; isso deve virar item explícito de checklist na Fase 4 |
 | Latência e custo do loop ReAct: até `MAX_REACT_ITERATIONS` (5) chamadas ao LLM em série, cada uma podendo levar segundos, somadas ao `MCP_TOOL_TIMEOUT_S` (30s) por chamada de tool | `graph/builder.py`, `REQUEST_TIMEOUT_S=120s` | Tarefas multi-step no limite de iterações podem se aproximar do teto global e retornar `REQUEST_TIMEOUT` mesmo progredindo normalmente | `REQUEST_TIMEOUT_S` já é configurável por env; documentar no `design.md`/README a relação aproximada `MAX_REACT_ITERATIONS × (tempo_llm + MCP_TOOL_TIMEOUT_S) < REQUEST_TIMEOUT_S` para quem for ajustar os defaults |
 | `GITHUB_READ_ONLY=1` como default seguro interage com `tool_policy.yaml`: se o server já bloqueia escrita nativamente, uma tool de escrita "permitida" na allowlist ainda falhará no server, gerando um erro de negócio diferente do esperado pelo operador | `docker/github/Dockerfile`, `config/tool_policy.yaml` | Confusão operacional ao tentar habilitar escrita no GitHub sem desligar `GITHUB_READ_ONLY` | Documentar explicitamente no `.env.example` que `GITHUB_READ_ONLY` e a allowlist são dois portões independentes — ambos precisam permitir a operação |
@@ -516,7 +516,7 @@ ENV MCP_STDIO_ARGS=/projects
 
 ```dockerfile
 # docker/github/Dockerfile
-FROM ghcr.io/github/github-mcp-server:<pin> AS bin
+FROM ghcr.io/github/github-mcp-server:v1.11.0 AS bin
 FROM shim-base:latest
 COPY --from=bin /server/github-mcp-server /usr/local/bin/github-mcp-server
 ENV MCP_SERVER_NAME=github
@@ -524,8 +524,27 @@ ENV MCP_STDIO_COMMAND=github-mcp-server
 ENV MCP_STDIO_ARGS=stdio
 ```
 
-> O caminho `/server/github-mcp-server` no estágio `bin` é a suposição a confirmar (ver
-> Risks & Concerns) — não é tratado como fato aqui.
+> **Confirmado na Fase 5 / Execute (T1).** O caminho `/server/github-mcp-server` estava
+> certo: `docker inspect ghcr.io/github/github-mcp-server:v1.11.0` mostra
+> `Entrypoint: ["/server/github-mcp-server"]` e `WorkingDir: /server`; extrair o arquivo
+> (`docker create` + `docker cp`) confirma um binário ELF64 Go estaticamente linkado nesse
+> caminho exato. Tag pinada: **`v1.11.0`** (`org.opencontainers.image.version=1.11.0`,
+> mesmo digest que `latest` no momento da checagem, 2026-08-30) — não é a tag `latest`
+> nem um chute; foi resolvida consultando a API de tags do GHCR
+> (`ghcr.io/v2/github/github-mcp-server/tags/list`) e cruzada com
+> `api.github.com/repos/github/github-mcp-server/releases/latest`.
+>
+> **Achado adicional, fora da suposição original:** a imagem é distroless/scratch — sem
+> `sh`, `ls` ou `busybox`. O comando de discovery prescrito em `tasks.md`
+> (`--entrypoint sh ... -c 'command -v github-mcp-server'`) falha com exit 127 porque não
+> há shell algum na imagem, não porque o binário esteja ausente ou em outro caminho. A
+> confirmação acima (`docker inspect` + `docker create`/`docker cp` + verificação do tipo
+> do arquivo) é o método que efetivamente funciona contra esta imagem e deve substituir o
+> comando de shell em qualquer re-checagem futura. Isso não muda o `docker/github/Dockerfile`
+> acima (o `COPY --from=bin` de um multi-stage build não depende de shell na imagem de
+> origem), mas é relevante para T27 (o shim não pode assumir um healthcheck baseado em
+> shell dentro do container `github`, caso um dia rode fora do padrão atual de TCP-only via
+> Python) e já está refletido na tabela de Risks & Concerns abaixo.
 
 ---
 

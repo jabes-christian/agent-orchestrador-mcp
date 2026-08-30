@@ -40,7 +40,7 @@ Verifier, discrimination sensor).
 
 | Gate | Quando | Comando |
 | --- | --- | --- |
-| Discovery | T1 apenas (spike de infra, sem código) | `docker run --rm --entrypoint sh ghcr.io/github/github-mcp-server:<tag> -c 'command -v github-mcp-server'` - exit 0 e caminho impresso |
+| Discovery | T1 apenas (spike de infra, sem código) | `docker inspect ghcr.io/github/github-mcp-server:v1.11.0 --format '{{json .Config.Entrypoint}}'` - imprime `["/server/github-mcp-server"]`. **Corrigido em T1**: o comando original (`--entrypoint sh ... -c 'command -v ...'`) falha com exit 127 porque a imagem é distroless/scratch (sem `sh`/`ls`/`busybox`); `docker inspect` no `Entrypoint` é o método que funciona contra esta imagem — ver `design.md` §4 |
 | Quick | tasks só com unit tests | `python -m pytest tests/unit -q` |
 | Full | tasks com integration/eval | `python -m pytest tests/unit tests/integration tests/eval -q` |
 | Build | tasks de config/infra e fim de fase | `ruff check . && ruff format --check . && mypy src && python -m pytest -q -m "not e2e and not live"` |
@@ -154,10 +154,10 @@ T35 → T36
 
 **Done when**:
 
-- [ ] Comando de discovery executado com sucesso (exit 0) e o caminho do binário impresso
-- [ ] Tag pinada da imagem registrada
-- [ ] `design.md` §4 atualizado com o caminho real e a tag, substituindo a suposição anterior
-- [ ] Gate check passa: comando de discovery listado em Gate Check Commands
+- [x] Comando de discovery executado com sucesso (exit 0) e o caminho do binário impresso
+- [x] Tag pinada da imagem registrada
+- [x] `design.md` §4 atualizado com o caminho real e a tag, substituindo a suposição anterior
+- [x] Gate check passa: comando de discovery listado em Gate Check Commands
 
 **Tests**: none
 **Gate**: discovery
@@ -180,10 +180,10 @@ T35 → T36
 
 **Done when**:
 
-- [ ] Todas as dependências necessárias ao Design estão listadas com versão pinada
-- [ ] Seções `[tool.ruff]`, `[tool.mypy]` e `[tool.pytest.ini_options]` configuradas
-- [ ] Markers `e2e` e `live` registrados em pytest para não gerar warning de marker desconhecido
-- [ ] Gate check passa: `ruff check . && ruff format --check . && mypy src`
+- [x] Todas as dependências necessárias ao Design estão listadas com versão pinada
+- [x] Seções `[tool.ruff]`, `[tool.mypy]` e `[tool.pytest.ini_options]` configuradas
+- [x] Markers `e2e` e `live` registrados em pytest para não gerar warning de marker desconhecido
+- [x] Gate check passa: `ruff check . && ruff format --check . && mypy src`
 
 **Tests**: none
 **Gate**: build
@@ -206,10 +206,10 @@ T35 → T36
 
 **Done when**:
 
-- [ ] Toda variável de ambiente citada na spec está mapeada em `Settings`, com o default correto
-- [ ] Instanciar `Settings()` sem `.env` não lança erro para as variáveis com default
-- [ ] Gate check passa: `python -m pytest tests/unit -q`
-- [ ] Test count: testes cobrindo os defaults e overrides por env passam (sem exclusões silenciosas)
+- [x] Toda variável de ambiente citada na spec está mapeada em `Settings`, com o default correto
+- [x] Instanciar `Settings()` sem `.env` não lança erro para as variáveis com default
+- [x] Gate check passa: `python -m pytest tests/unit -q`
+- [x] Test count: testes cobrindo os defaults e overrides por env passam (sem exclusões silenciosas)
 
 **Tests**: unit
 **Gate**: quick
@@ -232,10 +232,10 @@ T35 → T36
 
 **Done when**:
 
-- [ ] Cada linha de log emitida é um JSON válido
-- [ ] `request_id` está presente em todo log emitido dentro do contexto de uma request
-- [ ] Gate check passa: `python -m pytest tests/unit -q`
-- [ ] Test count: testes cobrindo o formato JSON e a presença de `request_id` passam
+- [x] Cada linha de log emitida é um JSON válido
+- [x] `request_id` está presente em todo log emitido dentro do contexto de uma request
+- [x] Gate check passa: `python -m pytest tests/unit -q`
+- [x] Test count: testes cobrindo o formato JSON e a presença de `request_id` passam
 
 **Tests**: unit
 **Gate**: quick
@@ -258,12 +258,12 @@ T35 → T36
 
 **Done when**:
 
-- [ ] `steps` acumula cada passo registrado, na ordem em que ocorreram
-- [ ] `used_tools` deriva corretamente no formato `server.tool`, sem duplicatas indevidas
-- [ ] `duration_ms` mede o tempo decorrido desde a criação do recorder
-- [ ] `to_dict()` produz um dicionário serializável em JSON
-- [ ] Gate check passa: `python -m pytest tests/unit -q`
-- [ ] Test count: testes cobrindo acumulação de steps, `used_tools` e `to_dict()` passam
+- [x] `steps` acumula cada passo registrado, na ordem em que ocorreram
+- [x] `used_tools` deriva corretamente no formato `server.tool`, sem duplicatas indevidas
+- [x] `duration_ms` mede o tempo decorrido desde a criação do recorder
+- [x] `to_dict()` produz um dicionário serializável em JSON
+- [x] Gate check passa: `python -m pytest tests/unit -q`
+- [x] Test count: testes cobrindo acumulação de steps, `used_tools` e `to_dict()` passam
 
 **Tests**: unit
 **Gate**: quick
@@ -288,9 +288,9 @@ T35 → T36
 
 **Done when**:
 
-- [ ] Os dois servers (`filesystem`, `github`) estão declarados com `transport`, `url`, `timeout` e `enabled`
-- [ ] O arquivo é YAML válido e carrega sem erro de parsing
-- [ ] Gate check passa: `ruff check . && ruff format --check . && mypy src`
+- [x] Os dois servers (`filesystem`, `github`) estão declarados com `transport`, `url`, `timeout` e `enabled`
+- [x] O arquivo é YAML válido e carrega sem erro de parsing
+- [x] Gate check passa: `ruff check . && ruff format --check . && mypy src`
 
 **Tests**: none
 **Gate**: build
@@ -313,9 +313,9 @@ T35 → T36
 
 **Done when**:
 
-- [ ] Toda condição de erro de cliente MCP prevista no Design tem uma exceção dedicada
-- [ ] As exceções herdam de uma base comum do pacote `mcp_client`
-- [ ] Gate check passa: `ruff check . && ruff format --check . && mypy src`
+- [x] Toda condição de erro de cliente MCP prevista no Design tem uma exceção dedicada
+- [x] As exceções herdam de uma base comum do pacote `mcp_client`
+- [x] Gate check passa: `ruff check . && ruff format --check . && mypy src`
 
 **Tests**: none
 **Gate**: build
@@ -338,11 +338,11 @@ T35 → T36
 
 **Done when**:
 
-- [ ] `discover()` popula a lista de tools por server a partir do que está declarado em `servers.yaml`
-- [ ] Falha de um server individual durante `discover()` não interrompe a descoberta dos demais
-- [ ] `servers()` e `get_tools()` retornam o estado atual do registry
-- [ ] Gate check passa: `python -m pytest tests/integration -q`
-- [ ] Test count: testes de integração contra um server MCP falso real cobrindo sucesso, server fora do ar e timeout passam
+- [x] `discover()` popula a lista de tools por server a partir do que está declarado em `servers.yaml`
+- [x] Falha de um server individual durante `discover()` não interrompe a descoberta dos demais
+- [x] `servers()` e `get_tools()` retornam o estado atual do registry
+- [x] Gate check passa: `python -m pytest tests/integration -q`
+- [x] Test count: testes de integração contra um server MCP falso real cobrindo sucesso, server fora do ar e timeout passam
 
 **Tests**: integration
 **Gate**: full
@@ -365,9 +365,9 @@ T35 → T36
 
 **Done when**:
 
-- [ ] Toda tool de escrita conhecida no Design está classificada como `write`
-- [ ] A allowlist reflete exatamente as tools de escrita autorizadas por padrão
-- [ ] Gate check passa: `ruff check . && ruff format --check . && mypy src`
+- [x] Toda tool de escrita conhecida no Design está classificada como `write`
+- [x] A allowlist reflete exatamente as tools de escrita autorizadas por padrão
+- [x] Gate check passa: `ruff check . && ruff format --check . && mypy src`
 
 **Tests**: none
 **Gate**: build
@@ -390,10 +390,10 @@ T35 → T36
 
 **Done when**:
 
-- [ ] `is_write()` classifica corretamente uma tool como escrita ou leitura conforme `tool_policy.yaml`
-- [ ] `is_allowed()` retorna `False` para toda tool de escrita fora da allowlist
-- [ ] Gate check passa: `python -m pytest tests/unit -q`
-- [ ] Test count: testes cobrindo `is_allowed()` e `is_write()` para tools dentro e fora da allowlist passam
+- [x] `is_write()` classifica corretamente uma tool como escrita ou leitura conforme `tool_policy.yaml`
+- [x] `is_allowed()` retorna `False` para toda tool de escrita fora da allowlist
+- [x] Gate check passa: `python -m pytest tests/unit -q`
+- [x] Test count: testes cobrindo `is_allowed()` e `is_write()` para tools dentro e fora da allowlist passam
 
 **Tests**: unit
 **Gate**: quick
