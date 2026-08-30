@@ -6,7 +6,7 @@ from httpx import ASGITransport, AsyncClient
 from orchestrator.main import create_app
 from orchestrator.mcp_client.registry import ServerConfig
 
-from .mcp_test_server import run_fake_mcp_server
+from .mcp_test_server import NeverInvokedChatModel, run_fake_mcp_server
 
 
 def _make_fake_filesystem_server() -> FastMCP:
@@ -33,7 +33,8 @@ async def test_get_servers_reports_write_true_from_policy_not_the_registry_place
         app = create_app(
             server_configs=[
                 ServerConfig(name="filesystem", transport="streamable_http", url=url, timeout=5.0)
-            ]
+            ],
+            model=NeverInvokedChatModel(),
         )
 
         async with app.router.lifespan_context(app):

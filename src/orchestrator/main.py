@@ -1,8 +1,12 @@
 """App factory e lifespan do gateway (MCPO-02 AC1, edge case de configuração inválida).
 
 `create_app()` monta a app do FastAPI, registra os exception handlers do catálogo de erros
-(T13) e liga um `lifespan` que roda `registry.discover()` (T8) na subida. Depois da descoberta,
-distingue dois motivos possíveis para um server ficar `unhealthy`:
+(T13) e liga um `lifespan` que roda `registry.discover()` (T8) na subida. A partir de T25, o
+mesmo `lifespan` também monta o `StateGraph` compilado (T24) a partir do catálogo de tools
+recém-descoberto -- `app.state.graph`/`app.state.graph_recursion_limit` ficam prontos antes do
+primeiro request, para `POST /tasks` (`api.routes_tasks`) só precisar lê-los de `request.app.state`,
+no mesmo padrão que `GET /servers` (T15) já usa para `request.app.state.registry`. Depois da
+descoberta, distingue dois motivos possíveis para um server ficar `unhealthy`:
 
 - **Fora do ar / lento** (conexão recusada, timeout): o host declarado resolve por DNS
   normalmente -- é esperado que aconteça em produção (MCPO-02 AC2) e não impede a subida.
@@ -19,9 +23,16 @@ from contextlib import asynccontextmanager
 from urllib.parse import urlparse
 
 from fastapi import FastAPI
+from langchain_core.language_models import BaseChatModel
+from langchain_core.tools import BaseTool
 
+from orchestrator.api.auth import get_settings
 from orchestrator.api.errors import register_exception_handlers
 from orchestrator.api.routes_servers import router as servers_router
+from orchestrator.api.routes_tasks import router as tasks_router
+from orchestrator.graph.builder import build_graph, compute_recursion_limit
+from orchestrator.llm.provider import get_chat_model
+from orchestrator.mcp_client.policy import ToolPolicy, load_tool_policy
 from orchestrator.mcp_client.registry import McpRegistry, ServerConfig, load_server_configs
 
 logger = logging.getLogger(__name__)
@@ -70,11 +81,23 @@ async def _fail_fast_on_misconfigured_servers(
             raise ServerMisconfiguredError(message)
 
 
-def create_app(server_configs: list[ServerConfig] | None = None) -> FastAPI:
+def create_app(
+    server_configs: list[ServerConfig] | None = None,
+    policy: ToolPolicy | None = None,
+    model: BaseChatModel | None = None,
+    tools_by_server: dict[str, list[BaseTool]] | None = None,
+) -> FastAPI:
     """Monta a app do gateway.
 
-    `server_configs` é injetável para teste (registry contra um MCP server falso em porta
-    efêmera); em produção, `None` faz a app carregar `config/servers.yaml` normalmente.
+    `server_configs`, `policy`, `model` e `tools_by_server` são injetáveis para teste
+    (registry contra um MCP server falso em porta efêmera; `policy`/`model` para exercitar
+    `POST /tasks` com um LLM roteirizado em vez do OpenRouter real, conforme design.md Seção 6
+    -- "LLM falso via FakeChatModel/respostas roteiradas"; `tools_by_server` para montar o
+    grafo com tools falsas -- sem nenhuma conexão MCP real -- no mesmo padrão de dublê que
+    `tests/unit/test_builder.py` já usa, necessário para testes de `POST /tasks` que não
+    precisam de uma conexão MCP real de ponta a ponta); em produção, `None` faz a app carregar
+    `config/servers.yaml`/`config/tool_policy.yaml`/`ChatOpenRouter` normalmente, com as tools
+    vindas do `registry` descoberto na subida.
     """
     resolved_configs = server_configs if server_configs is not None else load_server_configs()
 
@@ -84,11 +107,25 @@ def create_app(server_configs: list[ServerConfig] | None = None) -> FastAPI:
         await registry.discover()
         await _fail_fast_on_misconfigured_servers(registry, resolved_configs)
         app.state.registry = registry
+
+        settings = get_settings()
+        graph = build_graph(
+            tools_by_server=(
+                tools_by_server if tools_by_server is not None else registry.tools_by_server()
+            ),
+            policy=policy if policy is not None else load_tool_policy(),
+            model=model if model is not None else get_chat_model(settings),
+            max_iterations=settings.max_react_iterations,
+            tool_timeout_s=settings.mcp_tool_timeout_s,
+        )
+        app.state.graph = graph
+        app.state.graph_recursion_limit = compute_recursion_limit(settings.max_react_iterations)
         yield
 
     app = FastAPI(title="agent-orchestrator-mcp", lifespan=lifespan)
     register_exception_handlers(app)
     app.include_router(servers_router)
+    app.include_router(tasks_router)
     return app
 
 

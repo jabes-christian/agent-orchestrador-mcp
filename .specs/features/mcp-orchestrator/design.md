@@ -128,9 +128,12 @@ Dois mecanismos independentes, redundantes por design:
    deveria disparar em operação normal; é defesa em profundidade, não o mecanismo primário).
 
 O timeout **global** do request (`REQUEST_TIMEOUT_S`) não é uma aresta do grafo — vive na
-camada da API, envolvendo a chamada a `graph.ainvoke(...)` com `asyncio.timeout(...)`. Ao
-estourar, a API monta o erro `REQUEST_TIMEOUT` (504) usando o `trace` parcial acumulado até
-o ponto do cancelamento (steps já executados continuam no trace).
+camada da API, envolvendo a iteração sobre `graph.astream(..., stream_mode="values")` com
+`asyncio.timeout(...)` (não `graph.ainvoke(...)`: cancelar um `ainvoke()` não devolve nenhum
+estado parcial, então só `astream` permite guardar o último snapshot de estado emitido antes
+do cancelamento — ver AD-009, `STATE.md`). Ao estourar, a API monta o erro `REQUEST_TIMEOUT`
+(504) usando o `trace` parcial acumulado até o ponto do cancelamento (steps já executados
+continuam no trace).
 
 ### 1.6 Estado do grafo
 
@@ -455,7 +458,7 @@ rota `GET /servers` — não entra no grafo.
 | `MCP_TOOL_TIMEOUT` | 504 | `graph.nodes.tools` — timeout após 1 retry de transporte | `error` |
 | `TOOL_NOT_ALLOWED` | 403 | `graph.nodes.guard` — tool de escrita fora de `tool_policy.yaml` | `error` |
 | `LLM_PROVIDER_ERROR` | 502 | `llm.provider` / `graph.nodes.agent` — erro/indisponibilidade do OpenRouter | `error` |
-| `REQUEST_TIMEOUT` | 504 | `api.routes_tasks` — `asyncio.timeout` em torno de `graph.ainvoke` estourou | `error` |
+| `REQUEST_TIMEOUT` | 504 | `api.routes_tasks` — `asyncio.timeout` em torno da iteração sobre `graph.astream` estourou | `error` |
 | `INTERNAL_ERROR` | 500 | `api.errors` — handler global; qualquer exceção não classificada acima, incluindo `GraphRecursionError` inesperado | `error` |
 
 Regra fixa (MCPO-05 AC6): o handler global do FastAPI captura **toda** exceção não

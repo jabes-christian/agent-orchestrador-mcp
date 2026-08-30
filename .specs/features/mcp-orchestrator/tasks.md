@@ -795,11 +795,11 @@ T35 → T36
 
 **Done when**:
 
-- [ ] Request sem autenticação válida é rejeitada antes de invocar o grafo
-- [ ] Request que excede `REQUEST_TIMEOUT_S` retorna o erro de timeout do catálogo, não um 500 não tratado
-- [ ] Toda resposta 200 contém `trace` completo e parseável
-- [ ] Gate check passa: `python -m pytest tests/integration -q`
-- [ ] Test count: testes de integração cobrindo happy path, auth inválida e timeout passam
+- [x] Request sem autenticação válida é rejeitada antes de invocar o grafo
+- [x] Request que excede `REQUEST_TIMEOUT_S` retorna o erro de timeout do catálogo, não um 500 não tratado
+- [x] Toda resposta 200 contém `trace` completo e parseável
+- [x] Gate check passa: `python -m pytest tests/integration -q`
+- [x] Test count: testes de integração cobrindo happy path, auth inválida e timeout passam
 
 **Tests**: integration
 **Gate**: full
@@ -819,6 +819,12 @@ T35 → T36
 
 - MCP: NONE
 - Skill: NONE
+
+> ⚠️ **Lembrete AD-011** (`STATE.md`): no máximo 1 teste por arquivo pode invocar uma tool MCP
+> real via `MultiServerMCPClient`/`server_configs`. Se este arquivo de teste também exercitar
+> `POST /tasks` de ponta a ponta, use `create_app(tools_by_server={...})` com uma tool falsa
+> (`_FakeReadFileTool` em `test_routes_tasks.py`) em qualquer teste adicional — não uma segunda
+> conexão MCP real.
 
 **Done when**:
 
@@ -1021,6 +1027,13 @@ T35 → T36
 - MCP: NONE
 - Skill: NONE
 
+> ⚠️ **Lembrete AD-011** (`STATE.md`): condicional aqui — o smoke test roda contra containers
+> reais via HTTP, fora do processo pytest normal, então o bug (múltiplas conexões MCP reais em
+> event loops diferentes do MESMO processo Python) provavelmente não se aplica. Mas se
+> `tests/e2e/` acabar instanciando `MultiServerMCPClient` diretamente dentro do mesmo processo
+> pytest (em vez de só bater via HTTP no gateway), reavaliar: no máximo 1 teste por arquivo pode
+> invocar uma tool MCP real nesse cenário.
+
 **Done when**:
 
 - [ ] Existe pelo menos 1 caso de smoke test por MCP server declarado (`filesystem`, `github`)
@@ -1072,6 +1085,13 @@ T35 → T36
 
 - MCP: NONE
 - Skill: NONE
+
+> ⚠️ **Lembrete AD-011** (`STATE.md`): condicional aqui — se as tools do grafo nesta suíte forem
+> falsas (esperado, já que o objetivo é testar roteamento/LLM via fixtures do AD-004, não MCP
+> real), sem risco. Mas se algum caso do dataset acabar rodando contra um MCP server real dentro
+> do mesmo processo pytest, vale a regra: no máximo 1 teste por arquivo pode invocar uma tool MCP
+> real via `MultiServerMCPClient`/`server_configs` — use `create_app(tools_by_server={...})` com
+> tool falsa nos demais.
 
 **Done when**:
 

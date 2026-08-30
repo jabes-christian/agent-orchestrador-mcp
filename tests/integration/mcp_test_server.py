@@ -6,15 +6,35 @@ localhost, servido via Streamable HTTP -- o mesmo mecanismo de transporte usado 
 dados falsos (design.md Sec 6). `black_hole_server` aceita conexões TCP mas nunca responde,
 usado para exercitar um timeout de rede genuíno (em contraste com uma recusa de conexão
 imediata).
+
+`NeverInvokedChatModel` é o dublê padrão para `orchestrator.main.create_app(model=...)` em
+QUALQUER teste que não exercite `POST /tasks` de propósito (ex.: `test_main.py`,
+`test_routes_servers.py`) -- ver AD-010 em `STATE.md`: construir um `ChatOpenRouter` real
+(via `llm.provider.get_chat_model`) corrompe o event loop de testes async subsequentes no
+mesmo processo (o SDK `openrouter` prende algum recurso ao loop em que foi construído). Como
+`create_app()` monta o grafo no `lifespan` de toda app criada em teste, usar este dublê é
+obrigatório para qualquer `create_app()` que não precise de um LLM funcional.
 """
 
 import asyncio
 import contextlib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any
 
 import uvicorn
 from fastmcp import FastMCP
+
+
+class NeverInvokedChatModel:
+    """Dublê mínimo de `BaseChatModel`: falha se `ainvoke` for chamado. Evita construir um
+    `ChatOpenRouter` real em testes que não exercitam o LLM (ver docstring do módulo)."""
+
+    def bind_tools(self, tools: object) -> "NeverInvokedChatModel":
+        return self
+
+    async def ainvoke(self, messages: object) -> Any:
+        raise AssertionError("este dublê nao deveria ter sido invocado")
 
 
 @asynccontextmanager

@@ -10,7 +10,7 @@ from orchestrator.main import ServerMisconfiguredError, create_app
 from orchestrator.mcp_client.exceptions import ServerUnavailableError
 from orchestrator.mcp_client.registry import ServerConfig
 
-from .mcp_test_server import run_fake_mcp_server
+from .mcp_test_server import NeverInvokedChatModel, run_fake_mcp_server
 
 
 def _make_fake_mcp() -> FastMCP:
@@ -29,7 +29,8 @@ async def test_startup_discovers_tools_and_marks_a_reachable_server_healthy() ->
         app = create_app(
             server_configs=[
                 ServerConfig(name="filesystem", transport="streamable_http", url=url, timeout=5.0)
-            ]
+            ],
+            model=NeverInvokedChatModel(),
         )
 
         # `TestClient` roda o lifespan numa thread/loop separada (portal) -- isso
@@ -54,7 +55,8 @@ async def test_startup_fails_fast_when_a_declared_server_has_no_dns_entry() -> N
                 url="http://this-service-does-not-exist.invalid:8000/mcp",
                 timeout=1.0,
             )
-        ]
+        ],
+        model=NeverInvokedChatModel(),
     )
 
     with pytest.raises(ServerMisconfiguredError):
@@ -70,7 +72,8 @@ async def test_startup_succeeds_when_a_declared_server_merely_refuses_connection
             ServerConfig(
                 name="down", transport="streamable_http", url="http://127.0.0.1:1/mcp", timeout=1.0
             )
-        ]
+        ],
+        model=NeverInvokedChatModel(),
     )
 
     async with app.router.lifespan_context(app):
@@ -80,7 +83,7 @@ async def test_startup_succeeds_when_a_declared_server_merely_refuses_connection
 
 
 def test_registered_exception_handlers_produce_the_catalog_error_envelope() -> None:
-    app = create_app(server_configs=[])
+    app = create_app(server_configs=[], model=NeverInvokedChatModel())
 
     @app.get("/boom")
     async def _boom() -> None:
