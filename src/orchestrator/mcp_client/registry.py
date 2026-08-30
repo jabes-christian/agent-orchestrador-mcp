@@ -126,3 +126,10 @@ class McpRegistry:
         for tools in self._tools_by_server.values():
             all_tools.extend(tools)
         return all_tools
+
+    def tools_by_server(self) -> dict[str, list[BaseTool]]:
+        """Ferramentas descobertas, agrupadas por servidor -- para `graph/builder.py` (T24)
+        montar o catálogo do prompt e o mapeamento tool->server sem depender de casar por nome
+        duas estruturas moldadas diferente (`get_tools()` achata tudo, perdendo a atribuição de
+        servidor; `servers()` tem a atribuição mas não os objetos `BaseTool` reais)."""
+        return dict(self._tools_by_server)

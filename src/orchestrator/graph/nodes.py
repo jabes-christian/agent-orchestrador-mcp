@@ -8,8 +8,8 @@ tempo de build do grafo (catálogo de tools, modelo de chat já `bind_tools`-ado
 
 import asyncio
 import time
-from collections.abc import Awaitable, Callable
-from typing import Literal, cast
+from collections.abc import Callable
+from typing import Any, Literal, Protocol, cast
 
 import httpx
 from langchain_core.language_models import LanguageModelInput
@@ -23,7 +23,17 @@ from orchestrator.llm.provider import ainvoke
 from orchestrator.mcp_client.policy import ToolPolicy
 from orchestrator.observability.trace import TraceStep
 
-NodeFn = Callable[[OrchestratorState], Awaitable[dict[str, object]]]
+
+class NodeFn(Protocol):
+    """Assinatura de um nó do grafo. Definido como `Protocol` (não `Callable[...]`) porque o
+    overload genérico de `StateGraph.add_node` do LangGraph só resolve corretamente contra um
+    `Protocol` com `__call__` -- um alias `Callable[...]` equivalente falha a inferência de
+    tipo do LangGraph (limitação confirmada isoladamente; `graph/builder.py`, T24, é quem
+    consome este tipo)."""
+
+    async def __call__(self, state: OrchestratorState) -> dict[str, Any]: ...
+
+
 RouteDecision = Literal["guard", "completed", "no_suitable_server", "max_iterations_reached"]
 RouteFn = Callable[[OrchestratorState], RouteDecision]
 

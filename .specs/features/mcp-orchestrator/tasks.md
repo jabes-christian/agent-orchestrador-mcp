@@ -766,11 +766,11 @@ T35 → T36
 
 **Done when**:
 
-- [ ] Todos os nós das tasks T19-T23 estão conectados no `StateGraph` conforme o Design
-- [ ] `recursion_limit` está configurado de acordo com `MAX_REACT_ITERATIONS`
-- [ ] `compile()` retorna um grafo executável ponta a ponta
-- [ ] Gate check passa: `python -m pytest tests/unit -q`
-- [ ] Test count: teste de integração do grafo completo (happy path + caminho de erro) passa
+- [x] Todos os nós das tasks T19-T23 estão conectados no `StateGraph` conforme o Design
+- [x] `recursion_limit` está configurado de acordo com `MAX_REACT_ITERATIONS`
+- [x] `compile()` retorna um grafo executável ponta a ponta
+- [x] Gate check passa: `python -m pytest tests/unit -q`
+- [x] Test count: teste de integração do grafo completo (happy path + caminho de erro) passa
 
 **Tests**: unit
 **Gate**: quick
