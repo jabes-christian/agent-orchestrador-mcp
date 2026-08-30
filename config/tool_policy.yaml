@@ -1,0 +1,63 @@
+# Classificacao write/read + allowlist de tools de escrita (MCPO-08 AC1).
+#
+# Esta e a unica fonte de verdade para "esta tool e de escrita?" e "esta tool de escrita pode
+# rodar?" -- src/orchestrator/mcp_client/policy.py so le este arquivo, nunca hardcoda um nome de
+# tool. Uma tool que nao aparece em `write_tools` para o seu server e tratada como leitura.
+#
+# - write_tools: nomes de tool (exatamente como o MCP server os expoe) classificados como escrita.
+#   Fonte: READMEs oficiais dos servers (nao suposicao) --
+#   filesystem: readOnlyHint=false em github.com/modelcontextprotocol/servers/blob/main/src/filesystem/README.md
+#   github:     tools de mutacao documentadas em github.com/github/github-mcp-server#tools
+# - allowlist: subconjunto de `write_tools` que o agente pode de fato executar. Vazio por padrao
+#   nos dois servers -- a v1 e demonstravel so com leitura (spec.md), habilitar escrita e uma
+#   mudanca de configuracao explicita do operador.
+#
+# Lembrete (design.md -> Risks & Concerns): `GITHUB_READ_ONLY` (env do container github) e esta
+# allowlist sao dois portoes independentes -- habilitar uma tool aqui nao adianta se o server
+# continuar em modo read-only, e vice-versa.
+
+policies:
+  filesystem:
+    write_tools:
+      - create_directory
+      - write_file
+      - edit_file
+      - move_file
+    allowlist: []
+
+  github:
+    write_tools:
+      - actions_run_trigger
+      - assign_copilot_to_issue
+      - assign_copilot_to_issue_with_intent
+      - request_copilot_review
+      - discussion_comment_write
+      - create_gist
+      - update_gist
+      - add_issue_comment
+      - issue_write
+      - sub_issue_write
+      - label_write
+      - dismiss_notification
+      - manage_notification_subscription
+      - manage_repository_notification_subscription
+      - mark_all_notifications_read
+      - projects_write
+      - add_comment_to_pending_review
+      - add_reply_to_pull_request_comment
+      - create_pull_request
+      - merge_pull_request
+      - pull_request_review_write
+      - update_pull_request
+      - update_pull_request_branch
+      - create_branch
+      - create_or_update_file
+      - create_repository
+      - delete_file
+      - delete_repository
+      - fork_repository
+      - push_files
+      - star_repository
+      - unstar_repository
+      - create_pull_request_with_copilot
+    allowlist: []
