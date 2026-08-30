@@ -1,0 +1,67 @@
+[build-system]
+requires = ["hatchling==1.32.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agent-orchestrator-mcp"
+version = "0.1.0"
+description = "Agente orquestrador de MCP servers: recebe tarefa em linguagem natural via API HTTP e decide em tempo de execucao quais MCP servers/tools usar."
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi==0.141.1",
+    "uvicorn[standard]==0.52.4",
+    "pydantic==2.13.5",
+    "pydantic-settings==2.15.0",
+    "langgraph==1.2.11",
+    "langchain-core==1.6.1",
+    "langchain-openrouter==0.2.8",
+    "langchain-mcp-adapters==0.3.2",
+    "fastmcp==3.4.7",
+    "httpx==0.28.1",
+    "pyyaml==6.0.3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==9.1.1",
+    "pytest-asyncio==1.4.0",
+    "respx==0.23.1",
+    "ruff==0.16.5",
+    "mypy==2.3.1",
+    "types-PyYAML==6.0.12.20260815",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/orchestrator"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+src = ["src", "tests"]
+extend-exclude = [".specs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.13"
+mypy_path = "src"
+explicit_package_bases = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_return_any = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "e2e: end-to-end tests that require the full docker-compose stack running",
+    "live: tests that call the real OpenRouter API instead of a stub",
+]
