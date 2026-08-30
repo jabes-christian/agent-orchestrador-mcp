@@ -1,10 +1,10 @@
-"""Structured JSON logging with request_id correlation (MCPO-04 AC3).
+"""Logging JSON estruturado com correlação por request_id (MCPO-04 AC3).
 
-Every log line emitted through `configure_logging()` is a single JSON object with at least
-`request_id`, `timestamp`, `level` and `message`. `request_id` is read from a
-`contextvars.ContextVar` so call sites never have to pass it explicitly -- `bind_request_id()`
-sets it once per request and every log record emitted while that context is active picks it up
-automatically.
+Toda linha de log emitida via `configure_logging()` é um único objeto JSON contendo ao menos
+`request_id`, `timestamp`, `level` e `message`. O `request_id` é lido de uma
+`contextvars.ContextVar`, então os pontos de chamada nunca precisam passá-lo explicitamente --
+`bind_request_id()` o define uma vez por requisição e todo registro de log emitido enquanto esse
+contexto está ativo o captura automaticamente.
 """
 
 import contextvars
@@ -18,7 +18,7 @@ request_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar(
 
 
 class JsonFormatter(logging.Formatter):
-    """Renders a `LogRecord` as one JSON line, correlated with the current `request_id`."""
+    """Renderiza um `LogRecord` como uma linha JSON, correlacionada com o `request_id` atual."""
 
     def format(self, record: logging.LogRecord) -> str:
         payload: dict[str, object] = {
@@ -33,7 +33,8 @@ class JsonFormatter(logging.Formatter):
 
 
 def configure_logging(level: int = logging.INFO) -> None:
-    """Install the JSON formatter on the root logger. Call once at process startup."""
+    """Instala o formatter JSON no logger raiz. Chame uma única vez, na inicialização do
+    processo."""
     handler = logging.StreamHandler()
     handler.setFormatter(JsonFormatter())
     root = logging.getLogger()
@@ -42,16 +43,17 @@ def configure_logging(level: int = logging.INFO) -> None:
 
 
 def get_logger(name: str) -> logging.Logger:
-    """Return a stdlib logger; formatting/JSON is handled by the handler installed above."""
+    """Retorna um logger padrão da stdlib; a formatação/JSON é tratada pelo handler instalado
+    acima."""
     return logging.getLogger(name)
 
 
 def bind_request_id(request_id: str) -> contextvars.Token[str | None]:
-    """Bind `request_id` to the current context. Call `reset_request_id` with the returned token
-    when the request finishes."""
+    """Vincula `request_id` ao contexto atual. Chame `reset_request_id` com o token retornado
+    quando a requisição terminar."""
     return request_id_var.set(request_id)
 
 
 def reset_request_id(token: contextvars.Token[str | None]) -> None:
-    """Undo a `bind_request_id` call, restoring the previous context value."""
+    """Desfaz uma chamada a `bind_request_id`, restaurando o valor anterior do contexto."""
     request_id_var.reset(token)

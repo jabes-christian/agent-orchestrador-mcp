@@ -1,4 +1,4 @@
-"""Unit tests for orchestrator.observability.trace.TraceRecorder (MCPO-04 AC1/AC2)."""
+"""Testes unitários de orchestrator.observability.trace.TraceRecorder (MCPO-04 AC1/AC2)."""
 
 import json
 import time
@@ -57,7 +57,7 @@ def test_to_dict_is_json_serializable_with_contract_fields():
     recorder.record_step("filesystem", "read_file", {"path": "a.txt"}, 10, 1, "success")
 
     trace = recorder.to_dict(finish_reason="completed")
-    serialized = json.dumps(trace)  # raises if not JSON-serializable
+    serialized = json.dumps(trace)  # levanta exceção se não for serializável em JSON
     payload = json.loads(serialized)
 
     assert payload["request_id"] == "req-123"
@@ -71,4 +71,4 @@ def test_to_dict_is_json_serializable_with_contract_fields():
 def test_request_id_defaults_to_a_generated_uuid():
     recorder = TraceRecorder()
 
-    uuid.UUID(recorder.request_id)  # raises ValueError if not a valid UUID string
+    uuid.UUID(recorder.request_id)  # levanta ValueError se não for uma string UUID válida

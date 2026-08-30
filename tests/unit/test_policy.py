@@ -1,4 +1,4 @@
-"""Unit tests for orchestrator.mcp_client.policy (MCPO-08 AC1/AC3)."""
+"""Testes unitários de orchestrator.mcp_client.policy (MCPO-08 AC1/AC3)."""
 
 from pathlib import Path
 
@@ -48,7 +48,7 @@ def test_is_allowed_true_for_a_read_tool_regardless_of_allowlist():
 
 
 def test_load_tool_policy_reads_the_real_config_and_blocks_write_file_by_default():
-    # Matches spec.md's own edge case example for the allowlist story.
+    # Corresponde ao próprio exemplo de caso de borda do spec.md para a história da allowlist.
     policy = load_tool_policy(Path("config/tool_policy.yaml"))
 
     assert policy.is_write("filesystem", "write_file") is True

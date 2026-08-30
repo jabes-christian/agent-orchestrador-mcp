@@ -1,1 +1,1 @@
-"""Observability: structured logging and request trace recording."""
+"""Observabilidade: logging estruturado e registro de trace de requisições."""

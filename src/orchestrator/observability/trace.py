@@ -1,5 +1,5 @@
-"""TraceRecorder: accumulates the audit trail for one request and renders it per the API
-contract (MCPO-04 AC1/AC2)."""
+"""TraceRecorder: acumula a trilha de auditoria de uma requisição e a renderiza conforme o
+contrato da API (MCPO-04 AC1/AC2)."""
 
 import time
 import uuid
@@ -7,7 +7,7 @@ from typing import Literal, TypedDict
 
 
 class TraceStep(TypedDict):
-    """One entry of `trace.steps` (spec.md -> Contrato da API)."""
+    """Uma entrada de `trace.steps` (spec.md -> Contrato da API)."""
 
     step: int
     server: str
@@ -19,8 +19,8 @@ class TraceStep(TypedDict):
 
 
 class TraceRecorder:
-    """Accumulates `trace.steps`/`trace.used_tools` for one request and renders the final
-    `trace` dict (spec.md -> Contrato da API)."""
+    """Acumula `trace.steps`/`trace.used_tools` de uma requisição e renderiza o dict final
+    `trace` (spec.md -> Contrato da API)."""
 
     def __init__(self, request_id: str | None = None) -> None:
         self.request_id = request_id or str(uuid.uuid4())
@@ -37,7 +37,7 @@ class TraceRecorder:
         attempt: int,
         status: Literal["success", "failure", "blocked"],
     ) -> None:
-        """Append one step to the trace, in call order."""
+        """Adiciona um passo ao trace, na ordem em que as chamadas ocorrem."""
         self._steps.append(
             {
                 "step": len(self._steps) + 1,
@@ -56,10 +56,11 @@ class TraceRecorder:
 
     @property
     def used_tools(self) -> list[str]:
-        """Unique `server.tool` identifiers for steps that actually succeeded.
+        """Identificadores únicos `server.tool` dos passos que de fato tiveram sucesso.
 
-        A `blocked` step never reached the MCP server; a `failure` step produced no usable
-        result -- neither counts as a tool the task actually used to reach its answer.
+        Um passo `blocked` nunca chegou a alcançar o servidor MCP; um passo `failure` não
+        produziu resultado utilizável -- nenhum dos dois conta como uma ferramenta que a tarefa
+        efetivamente usou para chegar à resposta.
         """
         seen: list[str] = []
         for step in self._steps:
@@ -75,7 +76,7 @@ class TraceRecorder:
         return int((time.monotonic() - self._started_at) * 1000)
 
     def to_dict(self, finish_reason: str) -> dict[str, object]:
-        """Render the final `trace` dict, in the exact shape of the API contract."""
+        """Renderiza o dict final `trace`, exatamente no formato do contrato da API."""
         return {
             "request_id": self.request_id,
             "iterations": self.iterations,

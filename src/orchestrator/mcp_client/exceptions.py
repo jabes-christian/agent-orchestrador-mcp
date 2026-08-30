@@ -1,33 +1,36 @@
-"""Exception hierarchy for the MCP client layer (MCPO-05).
+"""Hierarquia de exceções da camada de cliente MCP (MCPO-05).
 
-Each exception maps 1:1 to a stable `error.code` from the API error catalog (spec.md -> Contrato
-da API). `api/errors.py` turns instances of these into the corresponding HTTP response.
+Cada exceção mapeia 1:1 para um `error.code` estável do catálogo de erros da API (spec.md ->
+Contrato da API). `api/errors.py` converte instâncias dessas exceções na resposta HTTP
+correspondente.
 """
 
 
 class McpClientError(Exception):
-    """Base class for every error condition raised by the MCP client layer."""
+    """Classe base para toda condição de erro levantada pela camada de cliente MCP."""
 
     error_code: str = "INTERNAL_ERROR"
     http_status: int = 500
 
 
 class ServerUnavailableError(McpClientError):
-    """The MCP server did not connect (connection refused, DNS failure, closed socket)."""
+    """O servidor MCP não conectou (conexão recusada, falha de DNS, socket fechado)."""
 
     error_code = "MCP_SERVER_UNAVAILABLE"
     http_status = 502
 
 
 class ToolTimeoutError(McpClientError):
-    """A tool call exceeded `MCP_TOOL_TIMEOUT_S` after the single automatic transport retry."""
+    """Uma chamada de ferramenta excedeu `MCP_TOOL_TIMEOUT_S` após a única retentativa
+    automática de transporte."""
 
     error_code = "MCP_TOOL_TIMEOUT"
     http_status = 504
 
 
 class ToolNotAllowedError(McpClientError):
-    """A write tool was requested that is not present in the `tool_policy.yaml` allowlist."""
+    """Foi solicitada uma ferramenta de escrita que não está presente na allowlist de
+    `tool_policy.yaml`."""
 
     error_code = "TOOL_NOT_ALLOWED"
     http_status = 403

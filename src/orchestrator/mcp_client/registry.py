@@ -1,9 +1,9 @@
-"""Registry: reads config/servers.yaml, discovers each MCP server's tools and exposes health
-status for GET /servers (MCPO-02 AC1/AC2/AC3).
+"""Registry: lê config/servers.yaml, descobre as ferramentas de cada servidor MCP e expõe o
+status de saúde para GET /servers (MCPO-02 AC1/AC2/AC3).
 
-This module and `config/servers.yaml` are the only place authorized to name an MCP server
-(AD-005, STATE.md) -- `graph/` never imports this module for a specific server/tool name, only
-consumes the already-resolved tool list.
+Este módulo e `config/servers.yaml` são o único lugar autorizado a nomear um servidor MCP
+(AD-005, STATE.md) -- `graph/` nunca importa este módulo em busca de um servidor/ferramenta
+específico, apenas consome a lista de ferramentas já resolvida.
 """
 
 from pathlib import Path
@@ -18,7 +18,7 @@ DEFAULT_SERVERS_CONFIG_PATH = Path("config/servers.yaml")
 
 
 class ServerConfig(BaseModel):
-    """One entry of `config/servers.yaml`."""
+    """Uma entrada de `config/servers.yaml`."""
 
     name: str
     transport: str
@@ -28,19 +28,19 @@ class ServerConfig(BaseModel):
 
 
 class ToolInfo(TypedDict):
-    """One entry of `ServerInfo.tools` (spec.md -> `GET /servers`)."""
+    """Uma entrada de `ServerInfo.tools` (spec.md -> `GET /servers`)."""
 
     name: str
     description: str
-    # NOTE: write-classification lives in `mcp_client.policy` (T9/T10), which this module does
-    # not depend on (see tasks.md T8 "Depends on"). Defaults to False here; the route/composition
-    # layer that has both the registry and the policy loaded is responsible for overlaying the
-    # real value before this reaches a client.
+    # NOTA: a classificação de escrita vive em `mcp_client.policy` (T9/T10), do qual este módulo
+    # não depende (ver tasks.md T8 "Depends on"). Aqui o valor é sempre False; `GET /servers`
+    # (task T15, ainda não implementada) é o único lugar autorizado a sobrepor o valor real vindo
+    # de `policy.is_write()` antes de responder ao cliente.
     write: bool
 
 
 class ServerInfo(TypedDict):
-    """One entry of the `GET /servers` response (spec.md -> Contrato da API)."""
+    """Uma entrada da resposta de `GET /servers` (spec.md -> Contrato da API)."""
 
     name: str
     status: Literal["healthy", "unhealthy"]
@@ -48,13 +48,14 @@ class ServerInfo(TypedDict):
 
 
 def load_server_configs(path: Path = DEFAULT_SERVERS_CONFIG_PATH) -> list[ServerConfig]:
-    """Parse `config/servers.yaml` into a list of `ServerConfig`."""
+    """Faz o parse de `config/servers.yaml` para uma lista de `ServerConfig`."""
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     return [ServerConfig(**entry) for entry in raw.get("servers", [])]
 
 
 class McpRegistry:
-    """Discovers MCP servers declared in `config/servers.yaml` and tracks their health/tools."""
+    """Descobre os servidores MCP declarados em `config/servers.yaml` e rastreia sua
+    saúde/ferramentas."""
 
     def __init__(self, server_configs: list[ServerConfig]) -> None:
         self._server_configs = server_configs
@@ -64,10 +65,11 @@ class McpRegistry:
                     "transport": "streamable_http",
                     "url": cfg.url,
                     "timeout": cfg.timeout,
-                    # The underlying MCP client defaults the *read* timeout to 300s regardless
-                    # of `timeout` above (which only bounds connect/write/pool) -- without this,
-                    # a server that accepts the connection but never answers would hang for 5
-                    # minutes instead of respecting the per-server `timeout` from servers.yaml.
+                    # O cliente MCP subjacente usa por padrão um timeout de *leitura* de 300s,
+                    # independentemente do `timeout` acima (que limita apenas connect/write/pool)
+                    # -- sem isso, um servidor que aceita a conexão mas nunca responde ficaria
+                    # travado por 5 minutos em vez de respeitar o `timeout` por servidor definido
+                    # em servers.yaml.
                     "sse_read_timeout": cfg.timeout,
                 }
                 for cfg in server_configs
@@ -78,12 +80,12 @@ class McpRegistry:
         self._healthy: dict[str, bool] = {cfg.name: False for cfg in server_configs}
 
     async def discover(self) -> None:
-        """Connect to every enabled server declared in config.
+        """Conecta a cada servidor habilitado declarado na configuração.
 
-        A failure on one server (refused connection, timeout, or any other transport error) is
-        isolated to that server -- it is marked unhealthy and discovery continues with the rest
-        (MCPO-02 AC2). A server with `enabled: false` is never contacted and stays unhealthy with
-        an empty tool list.
+        Uma falha em um servidor (conexão recusada, timeout ou qualquer outro erro de transporte)
+        fica isolada àquele servidor -- ele é marcado como unhealthy e a descoberta continua com
+        os demais (MCPO-02 AC2). Um servidor com `enabled: false` nunca é contatado e permanece
+        unhealthy, com lista de ferramentas vazia.
         """
         for cfg in self._server_configs:
             if not cfg.enabled:
@@ -97,7 +99,7 @@ class McpRegistry:
             self._healthy[cfg.name] = True
 
     def servers(self) -> list[ServerInfo]:
-        """Current discovery state, for `GET /servers` (MCPO-02 AC3)."""
+        """Estado atual da descoberta, para `GET /servers` (MCPO-02 AC3)."""
         result: list[ServerInfo] = []
         for cfg in self._server_configs:
             tools = self._tools_by_server.get(cfg.name, [])
@@ -118,7 +120,8 @@ class McpRegistry:
         return result
 
     async def get_tools(self) -> list[BaseTool]:
-        """All tools discovered across every healthy server, for the `prepare` graph node."""
+        """Todas as ferramentas descobertas em todos os servidores saudáveis, para o nó
+        `prepare` do grafo."""
         all_tools: list[BaseTool] = []
         for tools in self._tools_by_server.values():
             all_tools.extend(tools)

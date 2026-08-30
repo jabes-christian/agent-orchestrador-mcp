@@ -1,15 +1,16 @@
-"""Application settings loaded from environment variables.
+"""Configurações da aplicação carregadas a partir de variáveis de ambiente.
 
-Every field maps 1:1 to an environment variable named after it (upper-cased). Defaults mirror the
-values fixed in `spec.md` -> Assumptions & Open Questions. The three secrets below have no default
--- they must be supplied via `.env` or the process environment.
+Cada campo mapeia 1:1 para uma variável de ambiente nomeada a partir dele (em maiúsculas). Os
+valores padrão espelham os valores fixados em `spec.md` -> Assumptions & Open Questions. Os três
+segredos abaixo não têm valor padrão -- devem ser fornecidos via `.env` ou pela variável de
+ambiente do processo.
 """
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Centralized configuration for the orchestrator gateway."""
+    """Configuração centralizada do gateway do orquestrador."""
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

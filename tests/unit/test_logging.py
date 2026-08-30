@@ -1,4 +1,4 @@
-"""Unit tests for orchestrator.observability.logging (MCPO-04 AC3)."""
+"""Testes unitários de orchestrator.observability.logging (MCPO-04 AC3)."""
 
 import json
 import logging
@@ -29,7 +29,7 @@ def test_format_emits_valid_json_with_required_fields():
     record = _make_record("hello")
 
     line = formatter.format(record)
-    payload = json.loads(line)  # raises if not valid JSON
+    payload = json.loads(line)  # levanta exceção se não for um JSON válido
 
     assert payload["message"] == "hello"
     assert payload["level"] == "INFO"

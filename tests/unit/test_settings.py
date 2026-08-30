@@ -1,4 +1,5 @@
-"""Unit tests for orchestrator.settings.Settings (see spec.md -> Assumptions & Open Questions)."""
+"""Testes unitários de orchestrator.settings.Settings (ver spec.md -> Assumptions & Open
+Questions)."""
 
 import pytest
 from pydantic import ValidationError
@@ -16,7 +17,8 @@ OVERRIDABLE_ENV = ("MAX_REACT_ITERATIONS", "MCP_TOOL_TIMEOUT_S", "REQUEST_TIMEOU
 
 @pytest.fixture(autouse=True)
 def _isolated_env(monkeypatch, tmp_path):
-    """Run each test with no .env file on disk and a clean slate for every relevant env var."""
+    """Executa cada teste sem arquivo .env em disco e com um estado limpo para toda variável de
+    ambiente relevante."""
     monkeypatch.chdir(tmp_path)
     for key in (*REQUIRED_ENV, *OVERRIDABLE_ENV):
         monkeypatch.delenv(key, raising=False)
@@ -63,7 +65,7 @@ def test_required_secrets_are_read_from_env(monkeypatch):
 def test_missing_required_secret_raises(monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-openrouter-key")
     monkeypatch.setenv("OPENROUTER_MODEL", "test/model")
-    # ORCHESTRATOR_API_KEY intentionally left unset.
+    # ORCHESTRATOR_API_KEY deixado propositalmente sem valor.
 
     with pytest.raises(ValidationError):
         Settings()

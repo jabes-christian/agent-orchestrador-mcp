@@ -1,7 +1,7 @@
-"""Integration tests for orchestrator.mcp_client.registry (MCPO-02 AC1/AC2/AC3).
+"""Testes de integração de orchestrator.mcp_client.registry (MCPO-02 AC1/AC2/AC3).
 
-Uses a real `fastmcp.FastMCP` server on an ephemeral port (design.md Sec 6), not a mock, so the
-real Streamable HTTP transport is exercised end to end.
+Usa um servidor `fastmcp.FastMCP` real em uma porta efêmera (design.md Sec 6), não um mock, para
+exercitar o transporte Streamable HTTP real de ponta a ponta.
 """
 
 from fastmcp import FastMCP
@@ -39,7 +39,7 @@ async def test_discover_populates_tools_for_a_healthy_server():
 
 
 async def test_discover_marks_unreachable_server_unhealthy_without_aborting():
-    # Nothing listens on this loopback port -- the connection is refused immediately.
+    # Nada escuta nesta porta de loopback -- a conexão é recusada imediatamente.
     registry = McpRegistry(
         [
             ServerConfig(
@@ -48,7 +48,7 @@ async def test_discover_marks_unreachable_server_unhealthy_without_aborting():
         ]
     )
 
-    await registry.discover()  # must not raise
+    await registry.discover()  # não deve levantar exceção
 
     servers = registry.servers()
     assert servers[0]["status"] == "unhealthy"
@@ -88,7 +88,7 @@ async def test_discover_marks_timed_out_server_unhealthy_without_aborting():
             [ServerConfig(name="slow", transport="streamable_http", url=url, timeout=0.3)]
         )
 
-        await registry.discover()  # must not raise, and must not hang
+        await registry.discover()  # não deve levantar exceção nem travar
 
         servers = registry.servers()
         assert servers[0]["status"] == "unhealthy"

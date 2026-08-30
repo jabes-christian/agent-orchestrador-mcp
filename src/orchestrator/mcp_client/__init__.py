@@ -1,1 +1,2 @@
-"""MCP client: server registry, tool policy and the exception hierarchy for both."""
+"""Cliente MCP: registro de servidores, política de ferramentas e a hierarquia de exceções de
+ambos."""

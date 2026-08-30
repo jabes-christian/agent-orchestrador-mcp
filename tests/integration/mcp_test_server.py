@@ -1,9 +1,11 @@
-"""Test helpers: real MCP-server-shaped processes for integration tests.
+"""Auxiliares de teste: processos com o formato real de um servidor MCP, para testes de
+integração.
 
-`run_fake_mcp_server` starts a real `fastmcp.FastMCP` server on an ephemeral localhost port,
-served over Streamable HTTP -- the same transport mechanism production uses, with fake data
-(design.md Sec 6). `black_hole_server` accepts TCP connections but never replies, used to exercise
-a genuine network timeout (as opposed to an immediate connection refusal).
+`run_fake_mcp_server` inicia um servidor `fastmcp.FastMCP` real em uma porta efêmera do
+localhost, servido via Streamable HTTP -- o mesmo mecanismo de transporte usado em produção, com
+dados falsos (design.md Sec 6). `black_hole_server` aceita conexões TCP mas nunca responde,
+usado para exercitar um timeout de rede genuíno (em contraste com uma recusa de conexão
+imediata).
 """
 
 import asyncio
@@ -17,7 +19,8 @@ from fastmcp import FastMCP
 
 @asynccontextmanager
 async def run_fake_mcp_server(mcp: FastMCP) -> AsyncIterator[str]:
-    """Start `mcp` as a Streamable HTTP server on an ephemeral port; yield its `/mcp` URL."""
+    """Inicia `mcp` como um servidor Streamable HTTP em uma porta efêmera; retorna sua URL
+    `/mcp`."""
     app = mcp.http_app(path="/mcp")
     config = uvicorn.Config(app, host="127.0.0.1", port=0, log_level="error")
     server = uvicorn.Server(config)
@@ -33,19 +36,19 @@ async def run_fake_mcp_server(mcp: FastMCP) -> AsyncIterator[str]:
 
 
 async def _swallow(_reader: asyncio.StreamReader, _writer: asyncio.StreamWriter) -> None:
-    # Accept the connection but never respond, forcing the client to hit its own timeout.
+    # Aceita a conexão mas nunca responde, forçando o cliente a atingir seu próprio timeout.
     await asyncio.sleep(3600)
 
 
 @asynccontextmanager
 async def black_hole_server() -> AsyncIterator[str]:
-    """A TCP server that accepts connections and never answers. Yields its base URL.
+    """Um servidor TCP que aceita conexões e nunca responde. Retorna sua URL base.
 
-    `asyncio.start_server` already starts accepting connections on its own -- no `serve_forever()`
-    task is needed. `close()` stops listening immediately, but the dangling connection that timed
-    out on the client side is still "handled" by `_swallow`, which never returns -- so
-    `wait_closed()` (which waits for in-flight connection handlers too) would hang forever. Give
-    it a short grace period and move on regardless.
+    `asyncio.start_server` já começa a aceitar conexões por conta própria -- nenhuma task
+    `serve_forever()` é necessária. `close()` para de escutar imediatamente, mas a conexão pendente
+    que expirou do lado do cliente ainda está sendo "tratada" por `_swallow`, que nunca retorna --
+    então `wait_closed()` (que também espera por handlers de conexão em andamento) ficaria travado
+    para sempre. Dá-se um curto período de tolerância e segue-se em frente de qualquer forma.
     """
     server = await asyncio.start_server(_swallow, "127.0.0.1", 0)
     port = server.sockets[0].getsockname()[1]
