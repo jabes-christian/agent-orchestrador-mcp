@@ -1,0 +1,23 @@
+# MCP servers conhecidos pelo gateway (MCPO-02 AC4).
+#
+# Este arquivo, junto com src/orchestrator/mcp_client/registry.py, e o unico lugar autorizado a
+# declarar nomes de MCP server (AD-005, STATE.md). Adicionar um novo server e uma mudanca aqui,
+# nao uma mudanca no pacote do grafo.
+#
+# - transport: sempre "streamable_http" (ver design.md Sec 2) -- os servers rodam atras de um shim
+#   que traduz stdio para Streamable HTTP dentro da rede interna do docker-compose.
+# - url: endereco do shim do server na rede interna ("mcpnet"), path fixo "/mcp".
+# - timeout: timeout em segundos para chamadas de tool a este server (ver MCP_TOOL_TIMEOUT_S).
+# - enabled: permite desligar um server declarado sem remove-lo do arquivo.
+
+servers:
+  - name: filesystem
+    transport: streamable_http
+    url: http://mcp-filesystem:8000/mcp
+    timeout: 30
+    enabled: true
+  - name: github
+    transport: streamable_http
+    url: http://mcp-github:8000/mcp
+    timeout: 30
+    enabled: true
