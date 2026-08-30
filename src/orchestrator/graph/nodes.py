@@ -20,6 +20,7 @@ from langchain_core.tools import BaseTool
 from orchestrator.graph.prompts import ToolCatalogEntry, build_system_prompt
 from orchestrator.graph.state import ErrorInfo, OrchestratorState
 from orchestrator.llm.provider import ainvoke
+from orchestrator.mcp_client.policy import ToolPolicy
 from orchestrator.observability.trace import TraceStep
 
 NodeFn = Callable[[OrchestratorState], Awaitable[dict[str, object]]]
@@ -193,3 +194,51 @@ def make_tools_node(
         }
 
     return tools_node
+
+
+def make_guard_node(policy: ToolPolicy, server_by_tool: dict[str, str]) -> NodeFn:
+    """Fabrica o nó `guard`: bloqueia a leva inteira de `tool_calls` pendente se QUALQUER uma
+    delas for uma tool de escrita fora da allowlist (MCPO-08 AC2/AC3), antes de qualquer
+    chamada ao MCP server -- nenhuma tool da leva executa nesse caso, nem as que seriam
+    permitidas (design.md -> nó `guard`). Só as tools efetivamente reprovadas ganham um step
+    `"blocked"`; as demais da mesma leva nunca chegam a ser tentadas, então não geram step.
+
+    `policy` e `server_by_tool` são resolvidos por `graph/builder.py` (T24) a partir de
+    `mcp_client.policy`/`mcp_client.registry`; este módulo nunca importa `registry` diretamente
+    (AD-005) -- `mcp_client.policy` é dependência declarada de `graph.nodes` (design.md ->
+    Components)."""
+
+    async def guard(state: OrchestratorState) -> dict[str, object]:
+        last_message = state["messages"][-1]
+        tool_calls = last_message.tool_calls if isinstance(last_message, AIMessage) else []
+
+        steps: list[TraceStep] = list(state["steps"])
+        error: ErrorInfo | None = None
+
+        for call in tool_calls:
+            tool_name = call["name"]
+            server = server_by_tool.get(tool_name, "unknown")
+            if policy.is_allowed(server, tool_name):
+                continue
+            steps.append(
+                {
+                    "step": len(steps) + 1,
+                    "server": server,
+                    "tool": tool_name,
+                    "arguments": call["args"],
+                    "duration_ms": 0,
+                    "attempt": 1,
+                    "status": "blocked",
+                }
+            )
+            if error is None:
+                error = {
+                    "code": "TOOL_NOT_ALLOWED",
+                    "message": f"a tool de escrita '{server}.{tool_name}' nao esta na allowlist",
+                }
+
+        if error is None:
+            return {}
+        return {"steps": steps, "error": error}
+
+    return guard

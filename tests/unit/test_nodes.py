@@ -10,12 +10,14 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 
 from orchestrator.graph.nodes import (
     make_agent_node,
+    make_guard_node,
     make_prepare_node,
     make_route_after_agent,
     make_tools_node,
 )
 from orchestrator.graph.prompts import ToolCatalogEntry, build_system_prompt
 from orchestrator.llm.provider import LlmProviderError
+from orchestrator.mcp_client.policy import ToolPolicy
 
 _CATALOG: list[ToolCatalogEntry] = [
     {"server": "filesystem", "name": "read_file", "description": "Le o conteudo de um arquivo."},
@@ -284,3 +286,95 @@ async def test_tools_node_preserves_prior_steps_and_increments_iterations() -> N
     assert result["steps"][1]["step"] == 2
     assert result["used_tools"] == ["github.get_issue", "filesystem.read_file"]
     assert result["iterations"] == 2
+
+
+_POLICY = ToolPolicy(
+    {
+        "filesystem": {"write_tools": ["write_file"], "allowlist": []},
+        "github": {"write_tools": ["create_issue"], "allowlist": ["create_issue"]},
+    }
+)
+_SERVER_BY_TOOL = {"read_file": "filesystem", "write_file": "filesystem", "create_issue": "github"}
+
+
+def _state_with_calls(calls: list[dict], **overrides: object) -> dict:
+    base = {"messages": [AIMessage(content="", tool_calls=calls)], "steps": []}
+    base.update(overrides)
+    return base
+
+
+async def test_guard_passes_through_a_read_tool() -> None:
+    guard = make_guard_node(_POLICY, _SERVER_BY_TOOL)
+    call = {"name": "read_file", "args": {"path": "a.txt"}, "id": "1"}
+
+    result = await guard(_state_with_calls([call]))
+
+    assert result == {}
+
+
+async def test_guard_passes_through_a_write_tool_present_in_the_allowlist() -> None:
+    guard = make_guard_node(_POLICY, _SERVER_BY_TOOL)
+    call = {"name": "create_issue", "args": {"title": "bug"}, "id": "1"}
+
+    result = await guard(_state_with_calls([call]))
+
+    assert result == {}
+
+
+async def test_guard_blocks_a_write_tool_outside_the_allowlist_before_any_execution() -> None:
+    guard = make_guard_node(_POLICY, _SERVER_BY_TOOL)
+    call = {"name": "write_file", "args": {"path": "a.txt", "content": "x"}, "id": "1"}
+
+    result = await guard(_state_with_calls([call]))
+
+    assert result["error"] == {
+        "code": "TOOL_NOT_ALLOWED",
+        "message": "a tool de escrita 'filesystem.write_file' nao esta na allowlist",
+    }
+    assert result["steps"][-1]["status"] == "blocked"
+    assert result["steps"][-1]["server"] == "filesystem"
+    assert result["steps"][-1]["tool"] == "write_file"
+
+
+async def test_guard_blocks_the_whole_batch_when_any_call_is_disallowed() -> None:
+    guard = make_guard_node(_POLICY, _SERVER_BY_TOOL)
+    allowed_call = {"name": "read_file", "args": {"path": "a.txt"}, "id": "1"}
+    blocked_call = {"name": "write_file", "args": {"path": "a.txt", "content": "x"}, "id": "2"}
+
+    result = await guard(_state_with_calls([allowed_call, blocked_call]))
+
+    assert result["error"]["code"] == "TOOL_NOT_ALLOWED"
+    assert len(result["steps"]) == 1
+    assert result["steps"][0]["tool"] == "write_file"
+
+
+async def test_guard_records_a_blocked_step_for_each_disallowed_call() -> None:
+    guard = make_guard_node(_POLICY, _SERVER_BY_TOOL)
+    calls = [
+        {"name": "write_file", "args": {"path": "a.txt"}, "id": "1"},
+        {"name": "write_file", "args": {"path": "b.txt"}, "id": "2"},
+    ]
+
+    result = await guard(_state_with_calls(calls))
+
+    assert len(result["steps"]) == 2
+    assert all(step["status"] == "blocked" for step in result["steps"])
+
+
+async def test_guard_preserves_prior_steps_when_blocking() -> None:
+    guard = make_guard_node(_POLICY, _SERVER_BY_TOOL)
+    prior_step = {
+        "step": 1,
+        "server": "github",
+        "tool": "get_issue",
+        "arguments": {},
+        "duration_ms": 10,
+        "attempt": 1,
+        "status": "success",
+    }
+    call = {"name": "write_file", "args": {"path": "a.txt"}, "id": "1"}
+
+    result = await guard(_state_with_calls([call], steps=[prior_step]))
+
+    assert result["steps"][0] == prior_step
+    assert result["steps"][1]["step"] == 2

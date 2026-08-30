@@ -712,11 +712,11 @@ T35 → T36
 
 **Done when**:
 
-- [ ] Tool de escrita fora da allowlist é bloqueada antes de qualquer chamada ao MCP server
-- [ ] O step de bloqueio tem `status: "blocked"` e é registrado em `steps[]`
-- [ ] Erro `TOOL_NOT_ALLOWED` é retornado nesse caminho
-- [ ] Gate check passa: `python -m pytest tests/unit -q`
-- [ ] Test count: testes cobrindo bloqueio de tool não permitida e passagem de tool permitida passam
+- [x] Tool de escrita fora da allowlist é bloqueada antes de qualquer chamada ao MCP server
+- [x] O step de bloqueio tem `status: "blocked"` e é registrado em `steps[]`
+- [x] Erro `TOOL_NOT_ALLOWED` é retornado nesse caminho
+- [x] Gate check passa: `python -m pytest tests/unit -q`
+- [x] Test count: testes cobrindo bloqueio de tool não permitida e passagem de tool permitida passam
 
 **Tests**: unit
 **Gate**: quick
