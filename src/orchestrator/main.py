@@ -28,6 +28,7 @@ from langchain_core.tools import BaseTool
 
 from orchestrator.api.auth import get_settings
 from orchestrator.api.errors import register_exception_handlers
+from orchestrator.api.routes_health import router as health_router
 from orchestrator.api.routes_servers import router as servers_router
 from orchestrator.api.routes_tasks import router as tasks_router
 from orchestrator.graph.builder import build_graph, compute_recursion_limit
@@ -126,6 +127,7 @@ def create_app(
     register_exception_handlers(app)
     app.include_router(servers_router)
     app.include_router(tasks_router)
+    app.include_router(health_router)
     return app
 
 

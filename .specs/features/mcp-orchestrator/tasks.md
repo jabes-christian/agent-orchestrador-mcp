@@ -828,10 +828,10 @@ T35 → T36
 
 **Done when**:
 
-- [ ] `GET /health` reporta o estado agregado do gateway e de cada MCP server
-- [ ] Um MCP server fora do ar aparece refletido no health, sem derrubar a rota
-- [ ] Gate check passa: `python -m pytest tests/integration -q`
-- [ ] Test count: testes de integração cobrindo todos-servidores-ok e um-servidor-fora-do-ar passam
+- [x] `GET /health` reporta o estado agregado do gateway e de cada MCP server
+- [x] Um MCP server fora do ar aparece refletido no health, sem derrubar a rota
+- [x] Gate check passa: `python -m pytest tests/integration -q`
+- [x] Test count: testes de integração cobrindo todos-servidores-ok e um-servidor-fora-do-ar passam
 
 **Tests**: integration
 **Gate**: full
