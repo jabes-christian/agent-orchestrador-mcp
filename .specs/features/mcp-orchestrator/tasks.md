@@ -882,8 +882,8 @@ T35 → T36
 
 **Done when**:
 
-- [ ] A imagem builda sem erro e contém o shim de T27 pronto para uso
-- [ ] Gate check passa: `ruff check . && ruff format --check . && mypy src`
+- [x] A imagem builda sem erro e contém o shim de T27 pronto para uso
+- [x] Gate check passa: `ruff check . && ruff format --check . && mypy src`
 
 **Tests**: none
 **Gate**: build
