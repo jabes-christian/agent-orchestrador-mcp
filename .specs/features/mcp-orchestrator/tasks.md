@@ -906,8 +906,8 @@ T35 → T36
 
 **Done when**:
 
-- [ ] A imagem builda sem erro com o pacote do server `filesystem` na versão pinada
-- [ ] Gate check passa: `ruff check . && ruff format --check . && mypy src`
+- [x] A imagem builda sem erro com o pacote do server `filesystem` na versão pinada
+- [x] Gate check passa: `ruff check . && ruff format --check . && mypy src`
 
 **Tests**: none
 **Gate**: build
