@@ -979,9 +979,9 @@ T35 → T36
 
 **Done when**:
 
-- [ ] Toda variável de `Settings` (T3) está presente em `.env.example` com um valor de exemplo
-- [ ] A nota sobre `GITHUB_READ_ONLY` vs. allowlist está documentada no arquivo
-- [ ] Gate check passa: `ruff check . && ruff format --check . && mypy src`
+- [x] Toda variável de `Settings` (T3) está presente em `.env.example` com um valor de exemplo
+- [x] A nota sobre `GITHUB_READ_ONLY` vs. allowlist está documentada no arquivo
+- [x] Gate check passa: `ruff check . && ruff format --check . && mypy src`
 
 **Tests**: none
 **Gate**: build
