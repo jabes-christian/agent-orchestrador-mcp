@@ -930,9 +930,9 @@ T35 → T36
 
 **Done when**:
 
-- [ ] A imagem builda sem erro usando o caminho de binário confirmado em T1
-- [ ] Se o binário não estiver disponível pronto, o fallback de build documentado em T1 está implementado
-- [ ] Gate check passa: `ruff check . && ruff format --check . && mypy src`
+- [x] A imagem builda sem erro usando o caminho de binário confirmado em T1
+- [x] Se o binário não estiver disponível pronto, o fallback de build documentado em T1 está implementado
+- [x] Gate check passa: `ruff check . && ruff format --check . && mypy src`
 
 **Tests**: none
 **Gate**: build
