@@ -955,8 +955,8 @@ T35 → T36
 
 **Done when**:
 
-- [ ] A imagem builda sem erro e sobe a aplicação FastAPI completa
-- [ ] Gate check passa: `ruff check . && ruff format --check . && mypy src`
+- [x] A imagem builda sem erro e sobe a aplicação FastAPI completa
+- [x] Gate check passa: `ruff check . && ruff format --check . && mypy src`
 
 **Tests**: none
 **Gate**: build
