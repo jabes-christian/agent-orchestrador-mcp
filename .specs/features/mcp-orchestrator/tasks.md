@@ -42,8 +42,8 @@ Verifier, discrimination sensor).
 | --- | --- | --- |
 | Discovery | T1 apenas (spike de infra, sem código) | `docker inspect ghcr.io/github/github-mcp-server:v1.11.0 --format '{{json .Config.Entrypoint}}'` - imprime `["/server/github-mcp-server"]`. **Corrigido em T1**: o comando original (`--entrypoint sh ... -c 'command -v ...'`) falha com exit 127 porque a imagem é distroless/scratch (sem `sh`/`ls`/`busybox`); `docker inspect` no `Entrypoint` é o método que funciona contra esta imagem — ver `design.md` §4 |
 | Quick | tasks só com unit tests | `python -m pytest tests/unit -q` |
-| Full | tasks com integration/eval | `python -m pytest tests/unit tests/integration tests/eval -q` |
-| Build | tasks de config/infra e fim de fase | `ruff check . && ruff format --check . && mypy src && python -m pytest -q -m "not e2e and not live"` |
+| Full | tasks com integration/eval | `python -m pytest tests/unit -q && python -m pytest tests/integration -q` (a partir de T36, mais `&& python -m pytest tests/eval -q` como 3ª invocação separada) -- **corrigido no Execute (T27, AD-012)**: `tests/unit` e `tests/integration` combinados num único comando/processo travam de forma reprodutível (hang sem causa raiz identificada, não é bug de nenhum teste específico); rodar como invocações de processo separadas contorna o travamento sem perder cobertura |
+| Build | tasks de config/infra e fim de fase | `ruff check . && ruff format --check . && mypy src && python -m pytest tests/unit -q -m "not e2e and not live" && python -m pytest tests/integration -q -m "not e2e and not live"` -- mesma correção do gate Full (AD-012): invocações separadas em vez de `pytest -q` combinado |
 | E2E | T34 apenas (fora do gate de PR) | `docker compose up -d && python scripts/smoke_test.py && python -m pytest tests/e2e -q -m e2e` |
 
 ---
@@ -856,10 +856,10 @@ T35 → T36
 
 **Done when**:
 
-- [ ] `create_proxy` traduz corretamente uma sessão stdio para Streamable HTTP
-- [ ] Request com `Origin` não permitido é rejeitada
-- [ ] Gate check passa: `python -m pytest tests/integration -q`
-- [ ] Test count: testes de integração contra um server MCP falso real cobrindo tradução de protocolo e rejeição por `Origin` passam
+- [x] `create_proxy` traduz corretamente uma sessão stdio para Streamable HTTP
+- [x] Request com `Origin` não permitido é rejeitada
+- [x] Gate check passa: `python -m pytest tests/integration -q`
+- [x] Test count: testes de integração contra um server MCP falso real cobrindo tradução de protocolo e rejeição por `Origin` passam
 
 **Tests**: integration
 **Gate**: full
@@ -1098,7 +1098,7 @@ T35 → T36
 - [ ] A suíte roda os 15 casos do dataset em modo CI (offline, fixtures gravadas), sem chamada real ao OpenRouter
 - [ ] Acurácia ≥ 90% passa; um valor abaixo disso derruba a suíte com saída não-zero
 - [ ] Checklist do AD-004 confirmado: fixtures regravadas nesta mesma task caso `graph/prompts.py` já tenha mudado até aqui
-- [ ] Gate check passa: `python -m pytest tests/unit tests/integration tests/eval -q`
+- [ ] Gate check passa (AD-012 -- invocações separadas, não um comando combinado): `python -m pytest tests/unit -q && python -m pytest tests/integration -q && python -m pytest tests/eval -q`
 
 **Tests**: eval
 **Gate**: full
