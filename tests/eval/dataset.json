@@ -1,0 +1,107 @@
+[
+  {
+    "id": "fs_01",
+    "task": "Leia o conteudo do arquivo README.md do projeto e resuma em uma frase.",
+    "expected_server": ["filesystem"],
+    "expected_tool": ["read_file"],
+    "expected_finish_reason": "completed"
+  },
+  {
+    "id": "fs_02",
+    "task": "Liste os arquivos dentro do diretorio src/orchestrator.",
+    "expected_server": ["filesystem"],
+    "expected_tool": ["list_directory"],
+    "expected_finish_reason": "completed"
+  },
+  {
+    "id": "fs_03",
+    "task": "Procure, dentro do diretorio do projeto, por arquivos que contenham a palavra TODO.",
+    "expected_server": ["filesystem"],
+    "expected_tool": ["search_files"],
+    "expected_finish_reason": "completed"
+  },
+  {
+    "id": "fs_04",
+    "task": "Quais sao o tamanho e a data de modificacao do arquivo config/servers.yaml?",
+    "expected_server": ["filesystem"],
+    "expected_tool": ["get_file_info"],
+    "expected_finish_reason": "completed"
+  },
+  {
+    "id": "fs_05",
+    "task": "Leia de uma vez o conteudo dos arquivos pyproject.toml e .env.example.",
+    "expected_server": ["filesystem"],
+    "expected_tool": ["read_multiple_files"],
+    "expected_finish_reason": "completed"
+  },
+  {
+    "id": "gh_01",
+    "task": "Veja o conteudo do arquivo README.md do repositorio acme/api no github.",
+    "expected_server": ["github"],
+    "expected_tool": ["get_file_contents"],
+    "expected_finish_reason": "completed"
+  },
+  {
+    "id": "gh_02",
+    "task": "Busque no github repositorios publicos relacionados a 'mcp orchestrator'.",
+    "expected_server": ["github"],
+    "expected_tool": ["search_repositories"],
+    "expected_finish_reason": "completed"
+  },
+  {
+    "id": "gh_03",
+    "task": "Liste as issues abertas do repositorio acme/api no github.",
+    "expected_server": ["github"],
+    "expected_tool": ["list_issues"],
+    "expected_finish_reason": "completed"
+  },
+  {
+    "id": "gh_04",
+    "task": "Mostre os detalhes da issue numero 42 do repositorio acme/api no github.",
+    "expected_server": ["github"],
+    "expected_tool": ["get_issue"],
+    "expected_finish_reason": "completed"
+  },
+  {
+    "id": "gh_05",
+    "task": "Busque no codigo do repositorio acme/api, no github, por ocorrencias da funcao build_graph.",
+    "expected_server": ["github"],
+    "expected_tool": ["search_code"],
+    "expected_finish_reason": "completed"
+  },
+  {
+    "id": "multi_01",
+    "task": "Compare o conteudo do arquivo main.py do repositorio acme/api no github com o arquivo local src/orchestrator/main.py: primeiro leia o do github, depois leia o local.",
+    "expected_server": ["github", "filesystem"],
+    "expected_tool": ["get_file_contents", "read_file"],
+    "expected_finish_reason": "completed"
+  },
+  {
+    "id": "multi_02",
+    "task": "Leia a issue numero 3 do repositorio acme/api no github para entender o contexto, depois procure no diretorio docs/ do projeto por arquivos que mencionem esse mesmo assunto.",
+    "expected_server": ["github", "filesystem"],
+    "expected_tool": ["get_issue", "search_files"],
+    "expected_finish_reason": "completed"
+  },
+  {
+    "id": "nosrv_01",
+    "task": "Qual e a previsao do tempo em Sao Paulo hoje?",
+    "expected_server": [],
+    "expected_tool": [],
+    "expected_finish_reason": "no_suitable_server"
+  },
+  {
+    "id": "nosrv_02",
+    "task": "Envie um email para o time avisando que o deploy terminou.",
+    "expected_server": [],
+    "expected_tool": [],
+    "expected_finish_reason": "no_suitable_server"
+  },
+  {
+    "id": "nosrv_03",
+    "task": "Calcule quantos dias faltam para o Natal.",
+    "expected_server": [],
+    "expected_tool": [],
+    "expected_finish_reason": "no_suitable_server"
+  }
+]

@@ -1121,6 +1121,13 @@ não contém) verificada isoladamente com respostas HTTP sintéticas nos dois ca
 #### T35: Criar dataset de avaliação de roteamento
 
 **What**: Criar `tests/eval/dataset.json` com 15 casos rotulados: 5 de roteamento para `filesystem`, 5 para `github`, 2 multi-step (envolvendo os dois servers) e 3 de `no_suitable_server`.
+
+**Corrigido durante a execução (ver AD-017, `STATE.md`)**: `design.md` §6.1 lista o schema do
+caso como campos singulares (`expected_server`, `expected_tool`), mas os 2 casos multi-step
+precisam expressar uma sequência ordenada em dois servers diferentes. Decisão do usuário:
+ambos os campos são `list[str]` uniformemente nos 15 casos (lista de 1 elemento nos casos de
+único server, lista vazia nos 3 casos `no_suitable_server`), em vez de alternar tipo por caso.
+
 **Where**: `tests/eval/dataset.json`
 **Depends on**: T24
 **Reuses**: grafo compilado (T24) como sistema sob teste
@@ -1133,9 +1140,9 @@ não contém) verificada isoladamente com respostas HTTP sintéticas nos dois ca
 
 **Done when**:
 
-- [ ] O dataset tem exatamente 15 casos, na distribuição especificada (5/5/2/3)
-- [ ] Cada caso tem o rótulo esperado de roteamento
-- [ ] Gate check passa: `ruff check . && ruff format --check . && mypy src`
+- [x] O dataset tem exatamente 15 casos, na distribuição especificada (5/5/2/3)
+- [x] Cada caso tem o rótulo esperado de roteamento
+- [x] Gate check passa: `ruff check . && ruff format --check . && mypy src`
 
 **Tests**: none
 **Gate**: build
