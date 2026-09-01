@@ -24,6 +24,57 @@
 | AD-015 | Extensão do AD-014 -- mesmo arquivo (`registry.py`), mesma task (T8), causa raiz DIFERENTE. Depois de aplicar o fix do AD-014, o usuário revalidou `docker compose up -d` manualmente e encontrou `mcp-filesystem` ainda `unhealthy` mesmo com o startup completando dentro do `cfg.timeout` (30s) configurado -- os logs do server mostravam uma troca aparentemente bem-sucedida (POST/GET/POST/DELETE, todos 200/202), sem evidência de falha real. Investigação: `get_tools()` isolado contra o container real, chamado repetidamente, mostrou um padrão CLARO de corrida de largada -- a 1ª tentativa logo após o container `mcp-filesystem` subir (ou reiniciar) trava até `cfg.timeout`; a partir da 2ª tentativa (>=2s depois), sucesso instantâneo e consistente (confirmado 5/5 em múltiplas rodadas). Causa: o healthcheck TCP do compose (design.md Seção 5 -- "só verifica se o shim aceita conexão") marca o container `healthy` assim que o shim (uvicorn) sobe, mas o subprocesso stdio interno (`mcp-server-filesystem`) pode ainda não ter terminado de inicializar -- o `depends_on: condition: service_healthy` do gateway não cobre essa janela. Corrigido com 1 retry em `discover()` por server, com `_DISCOVER_RETRY_DELAY_S=1.0` de espera entre tentativas (mesmo padrão de retry único já usado em `graph.nodes.tools`, T21) -- decisão do usuário entre isso e enrijecer o healthcheck do compose para uma checagem MCP funcional real (rejeitada por divergir de design.md Seção 5, que delega a prova funcional real a `registry.py`, não ao compose). Trade-off aceito: quando a corrida acontece, o pior caso ainda leva até `cfg.timeout` completo (30s) antes do retry entrar -- validado contra a stack real repetidas vezes, sempre convergindo para `healthy` em ambos servers, só com essa latência ocasional. Teste de regressão (`test_discover_retries_once_and_recovers_from_a_flaky_first_attempt`) roda em SUBPROCESSO isolado (`registry_retry_check.py`) -- ver nota abaixo. | active | `src/orchestrator/mcp_client/registry.py` (`_discover_one`, `_DISCOVER_RETRY_DELAY_S`, T8); `tests/integration/registry_retry_check.py`, `tests/integration/test_registry.py::test_discover_retries_once_and_recovers_from_a_flaky_first_attempt`; `tests/integration/mcp_test_server.py` (`flaky_first_attempt_server`) |
 | AD-016 | O teste de regressão do AD-015 precisou de isolamento em SUBPROCESSO, mais forte que o já estabelecido pelo AD-011. Tentativa inicial: rodar o teste in-process, como último teste do arquivo (mesma mitigação do AD-011, "1 invocação real por arquivo"). Resultado: mesmo como último teste do próprio arquivo, corrompeu testes de OUTROS arquivos de integração rodando depois no mesmo processo (`test_routes_health.py`, `test_routes_servers.py`, `test_routes_tasks.py`) -- a mitigação do AD-011 ("1 invocação real por arquivo") se mostrou insuficiente aqui porque a corrupção atravessa arquivos dentro do mesmo processo pytest, não só o próprio arquivo. Causa provável: este teste envolve uma conexão MCP real que é CANCELADA em pleno voo (a 1ª tentativa, forçadamente interrompida por `asyncio.wait_for`) -- um padrão mais agressivo que os triggers já catalogados no AD-010/AD-011 (que envolviam conexões bem-sucedidas ou nunca-iniciadas, não canceladas em progresso). Mitigado isolando o teste em subprocesso (`tests/integration/registry_retry_check.py`, mesmo padrão já usado em T27 para `test_shim.py`/`shim_translation_check.py`) -- confirmado com 5 execuções completas e limpas de `tests/integration` após o isolamento (antes: falha intermitente em arquivos downstream). Regra para tasks futuras: qualquer teste que envolva uma conexão MCP real CANCELADA em progresso (não só invocada com sucesso) deve rodar em subprocesso isolado por padrão, não só seguir a regra "1 por arquivo" do AD-011. | active | `tests/integration/registry_retry_check.py`; `tests/integration/test_registry.py::test_discover_retries_once_and_recovers_from_a_flaky_first_attempt` |
 
+## Environment Notes
+
+> Observações de ambiente de desenvolvimento/rede que não são decisões de arquitetura do
+> projeto (por isso não numeradas como AD-xxx), mas que podem se repetir em sessões futuras e
+> não devem ser re-diagnosticadas do zero como bug de código.
+
+**EN-001 — Interceptação TLS corporativa (Netskope) bloqueia toda chamada HTTPS a
+`openrouter.ai` nesta máquina/rede, dentro e fora do Docker.**
+
+Durante a validação manual de T34 (smoke test) com credenciais OpenRouter reais,
+`POST /tasks` travava por exatos `REQUEST_TIMEOUT_S` (120s) com `trace.iterations: 0` --
+sintoma à primeira vista indistinguível de um bug em `orchestrator/llm/provider.py`
+(`get_chat_model`/`ainvoke`) ou em como `graph/builder.py` aplica `bind_tools()` às tools MCP.
+
+Causa raiz isolada com scripts mínimos fora do pytest (descartáveis, não versionados):
+- Toda chamada HTTPS a `openrouter.ai` via `httpx`/`requests` (portanto também o SDK
+  `openrouter` usado por `langchain-openrouter`) falha instantaneamente (~0.05s, nunca um
+  timeout real de rede) com `ConnectError: [SSL: CERTIFICATE_VERIFY_FAILED] ... self-signed
+  certificate in certificate chain`.
+- O certificado de fato servido em `openrouter.ai:443` (confirmado via `ssl`/
+  `openssl s_client`, fingerprint SHA-256
+  `28c4ce8f2e9e0aa20bffac5f8282d232c923ddd45ed965e40431ff61a756b545`) é emitido por
+  `ca.indragroup.goskope.com` (Netskope, CASB/SSE corporativo da rede da empresa) -- não pela
+  CA real do site. É um proxy de inspeção TLS reassinando o tráfego.
+- `curl` (usa o cert store do Windows via Schannel, não o bundle `certifi` do Python) passa da
+  checagem de confiança -- a CA da Netskope já está instalada no Windows -- mas falha numa
+  checagem de revogação (`CRYPT_E_NO_REVOCATION_CHECK`), etapa que o `ssl` do Python nem
+  executa.
+- **Confirmado também de DENTRO do container real** (`docker run --entrypoint python
+  agent-orchestrator-mcp-gateway:latest`, a mesma imagem que `docker compose up -d` roda):
+  mesmo fingerprint de certificado, mesma exceção `CERTIFICATE_VERIFY_FAILED` via
+  `httpx.get(...)`. `docker info` mostra `HTTP Proxy`/`HTTPS Proxy:
+  http.docker.internal:3128` -- o tráfego do container sai pelo mesmo caminho de rede do
+  host, então a interceptação Netskope alcança igualmente o gateway rodando em
+  `docker compose`. **Não é um problema específico de Python fora do Docker** -- o smoke
+  test real dentro da stack (T34) sofre exatamente o mesmo bloqueio nesta rede.
+
+O loop de retry embutido no SDK `openrouter` (`retry_connection_errors=True`) classifica esse
+`ConnectError` como retentável e insiste com backoff exponencial contra um handshake que
+nunca vai funcionar, até `asyncio.timeout(REQUEST_TIMEOUT_S)` em `routes_tasks.py` cortar em
+120s -- daí o sintoma de "trava" em vez de falha imediata e visível.
+
+**Decisão do usuário (2026-09-01):** nenhum workaround entra no código do repositório -- é
+uma condição de rede/ambiente (proxy corporativo de inspeção TLS), não algo que
+`llm/provider.py` deva contornar (o mesmo container se comporta de forma diferente fora desta
+rede/VPN; um workaround aqui não deveria viver em código que também roda em CI/produção fora
+dela). Antes de investigar qualquer timeout futuro de chamada HTTPS de saída (OpenRouter ou
+qualquer outro serviço externo) como bug de aplicação, verificar primeiro o emissor do
+certificado servido (`openssl s_client -connect <host>:443 -servername <host> | openssl x509
+-noout -issuer`) -- se for `*.goskope.com`, é isto, não regressão de código.
+
 ## Handoff
 
 **Feature ativa:** `mcp-orchestrator`
