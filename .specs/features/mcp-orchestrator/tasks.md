@@ -326,6 +326,18 @@ T35 → T36
 #### T8: Implementar registry do cliente MCP
 
 **What**: Implementar `registry`: parse de `config/servers.yaml`, construção do `MultiServerMCPClient`, `discover()` com falha isolada por server (um server fora do ar não derruba os demais), `servers()` e `get_tools()`.
+
+**Corrigido retroativamente durante T33 (Lote 4) — ver AD-014, `STATE.md`**: `discover()` não
+envolvia `self._client.get_tools(server_name=cfg.name)` em nenhum timeout explícito próprio,
+confiando só no `sse_read_timeout` passado ao `MultiServerMCPClient` — que se mostrou **não
+aplicado de fato** pelo SDK `mcp` subjacente contra um backend Streamable HTTP real que abre a
+sessão (headers 200 OK entregues, `mcp-session-id` presente) mas nunca escreve o primeiro
+evento SSE. Descoberto validando `docker compose up -d` de ponta a ponta em T33 (o gateway
+travava indefinidamente contra `mcp-filesystem` real; `mcp-github` não expunha o sintoma por
+falhar rápido antes por credenciais inválidas). Corrigido envolvendo a chamada em
+`asyncio.wait_for(..., timeout=cfg.timeout)`. Nenhum teste anterior pegava isso porque todos
+usam `fastmcp.FastMCP` em processo (resposta instantânea, nunca exercita esse timeout).
+
 **Where**: `src/orchestrator/mcp_client/registry.py`
 **Depends on**: T3, T6, T7
 **Reuses**: `Settings` (T3), `config/servers.yaml` (T6), hierarquia de exceções (T7)
@@ -343,10 +355,12 @@ T35 → T36
 - [x] `servers()` e `get_tools()` retornam o estado atual do registry
 - [x] Gate check passa: `python -m pytest tests/integration -q`
 - [x] Test count: testes de integração contra um server MCP falso real cobrindo sucesso, server fora do ar e timeout passam
+- [x] **(AD-014, retroativo)** `discover()` não trava indefinidamente contra um server cuja sessão Streamable HTTP abre mas nunca entrega o primeiro evento SSE — coberto por `tests/integration/test_registry.py::test_discover_marks_a_server_whose_sse_stream_never_responds_as_unhealthy` (fixture `sse_stream_hangs_server`, `tests/integration/mcp_test_server.py`); confirmado como regressão real: revertendo o `asyncio.wait_for`, o teste falha (trava além do limite do próprio teste) em vez de passar vacuamente
 
 **Tests**: integration
 **Gate**: full
-**Commit**: `feat(mcp-client): adicionar registry de servers mcp`
+**Commit (original, T8)**: `feat(mcp-client): adicionar registry de servers mcp`
+**Commit (correção retroativa, AD-014, aplicada durante T33)**: `fix(mcp-client): adicionar timeout explicito a discover() contra sse stream que nunca responde`
 
 ---
 
@@ -870,6 +884,13 @@ T35 → T36
 #### T28: Criar imagem base do shim
 
 **What**: Criar `docker/shim-base/Dockerfile`, a imagem base reutilizada pelos containers de MCP server que rodam atrás do shim.
+
+**Nota (T33, ver AD-013)**: este Dockerfile continua existindo e buildável isoladamente, mas
+`docker/filesystem/Dockerfile`/`docker/github/Dockerfile` (T29/T30) deixaram de depender dele
+via `FROM shim-base:latest` — o mecanismo do Docker Compose para builds cross-service
+(`additional_contexts` apontando para outro serviço) não funcionou de forma confiável neste
+ambiente; os dois passaram a replicar estes mesmos passos como seu próprio primeiro stage.
+
 **Where**: `docker/shim-base/Dockerfile`
 **Depends on**: T27
 **Reuses**: shim (T27)
@@ -894,6 +915,14 @@ T35 → T36
 #### T29: Criar imagem do server filesystem
 
 **What**: Criar `docker/filesystem/Dockerfile`, baseada na imagem do shim, empacotando o MCP server `filesystem` (Node) com a versão do pacote pinada.
+
+**Corrigido retroativamente durante T33 (Lote 4) — ver AD-013, `STATE.md`**: o Dockerfile
+deixou de fazer `FROM shim-base:latest` (tag local sem registry, que `docker compose build`
+não conseguia resolver de forma confiável) e virou multi-stage autocontido, replicando os
+passos de `docker/shim-base/Dockerfile` (T28) como seu próprio primeiro stage. O contexto de
+build também mudou de `docker/filesystem` para a raiz do repo (`.`), necessário para o `COPY
+shim/mcp_http_shim.py` alcançar `shim/`.
+
 **Where**: `docker/filesystem/Dockerfile`
 **Depends on**: T28
 **Reuses**: imagem base do shim (T28)
@@ -918,6 +947,12 @@ T35 → T36
 #### T30: Criar imagem do server github
 
 **What**: Criar `docker/github/Dockerfile`, baseada na imagem do shim, usando o caminho do binário confirmado em T1 (com o fallback de build documentado se necessário).
+
+**Corrigido retroativamente durante T33 (Lote 4) — ver AD-013, `STATE.md`**: mesma correção
+de T29 — o Dockerfile deixou de fazer `FROM shim-base:latest` e virou multi-stage
+autocontido, replicando os passos de `docker/shim-base/Dockerfile` (T28) como seu próprio
+primeiro stage; contexto de build mudou para a raiz do repo (`.`).
+
 **Where**: `docker/github/Dockerfile`
 **Depends on**: T1, T28
 **Reuses**: caminho do binário confirmado (T1), imagem base do shim (T28)
@@ -1004,9 +1039,15 @@ T35 → T36
 
 **Done when**:
 
-- [ ] Os 3 serviços estão declarados com healthcheck TCP
-- [ ] Os MCP servers estão só na rede interna; apenas a porta do gateway é publicada no host
-- [ ] Gate check passa: `ruff check . && ruff format --check . && mypy src`
+- [x] Os 3 serviços estão declarados com healthcheck TCP
+- [x] Os MCP servers estão só na rede interna; apenas a porta do gateway é publicada no host
+- [x] Gate check passa: `ruff check . && ruff format --check . && mypy src`
+- [x] **Validação além do gate formal**: `docker compose build` (máquina limpa, sem imagens
+      locais pré-existentes) e `docker compose up -d` executados de ponta a ponta contra o
+      compose real — os 3 healthchecks TCP passam, `GET /health` retorna `{"status":"ok",...}`
+      com os 2 servers `healthy`, `GET /servers` retorna o catálogo real de tools do
+      `filesystem`. Essa validação expôs os dois bugs corrigidos em AD-013/AD-014 (`STATE.md`)
+      — sem ela, o compose declarado seria estruturalmente correto mas não subiria de verdade.
 
 **Tests**: none
 **Gate**: build

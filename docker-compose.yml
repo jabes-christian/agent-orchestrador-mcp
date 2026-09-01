@@ -1,0 +1,57 @@
+# Stack completa (spec.md -> P1 "Stack completo via docker-compose", design.md Secao 5).
+#
+# `docker/filesystem/Dockerfile` e `docker/github/Dockerfile` (T29/T30) sao multi-stage
+# AUTOCONTIDOS -- cada um replica os passos de `docker/shim-base/Dockerfile` (T28) como seu
+# proprio primeiro stage, em vez de depender de uma tag externa `shim-base:latest`
+# pre-construida por um servico separado do compose (ver AD-013 em STATE.md: um servico
+# `shim-base` + `additional_contexts` apontando para ele nao resolveu de forma confiavel via
+# bake neste ambiente). Por isso `context: .` (raiz do repo) em vez de `docker/filesystem` /
+# `docker/github` -- os Dockerfiles agora tambem fazem `COPY shim/mcp_http_shim.py`, que
+# exige que o contexto de build alcance `shim/`.
+services:
+  gateway:
+    build: .
+    ports:
+      - "8080:8000"
+    env_file: .env
+    depends_on:
+      mcp-filesystem:
+        condition: service_healthy
+      mcp-github:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 8000), 2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks: [mcpnet]
+
+  mcp-filesystem:
+    build:
+      context: .
+      dockerfile: docker/filesystem/Dockerfile
+    volumes:
+      - ./workspace:/projects
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 8000), 2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks: [mcpnet]
+    # sem `ports:` -- nao exposto ao host
+
+  mcp-github:
+    build:
+      context: .
+      dockerfile: docker/github/Dockerfile
+    env_file: .env
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 8000), 2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks: [mcpnet]
+    # sem `ports:` -- nao exposto ao host
+
+networks:
+  mcpnet:
