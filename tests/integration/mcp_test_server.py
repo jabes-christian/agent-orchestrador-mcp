@@ -5,7 +5,12 @@ integração.
 localhost, servido via Streamable HTTP -- o mesmo mecanismo de transporte usado em produção, com
 dados falsos (design.md Sec 6). `black_hole_server` aceita conexões TCP mas nunca responde,
 usado para exercitar um timeout de rede genuíno (em contraste com uma recusa de conexão
-imediata).
+imediata). `sse_stream_hangs_server` entrega os headers HTTP de uma sessão Streamable HTTP
+válida (200 OK, `content-type: text/event-stream`, `mcp-session-id`) mas nunca escreve nenhum
+evento -- reproduz o cenário do AD-014 (STATE.md): diferente de `black_hole_server` (que nunca
+responde nada, nem os headers), aqui o handshake HTTP começa normalmente e é especificamente o
+corpo da stream SSE que nunca chega, o cenário em que `sse_read_timeout` sozinho se mostrou
+insuficiente.
 
 `NeverInvokedChatModel` é o dublê padrão para `orchestrator.main.create_app(model=...)` em
 QUALQUER teste que não exercite `POST /tasks` de propósito (ex.: `test_main.py`,
@@ -53,6 +58,50 @@ async def run_fake_mcp_server(mcp: FastMCP) -> AsyncIterator[str]:
     finally:
         server.should_exit = True
         await serve_task
+
+
+async def _sse_hang_asgi_app(scope: dict, receive: object, send: object) -> None:
+    """App ASGI minima (sem fastmcp/mcp) que abre uma sessao Streamable HTTP valida e
+    trava para sempre antes de escrever o primeiro evento."""
+    if scope["type"] != "http":
+        return
+    await send(
+        {
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [
+                (b"content-type", b"text/event-stream"),
+                (b"cache-control", b"no-cache, no-transform"),
+                (b"mcp-session-id", b"fake-session-id-nunca-usada"),
+            ],
+        }
+    )
+    await asyncio.sleep(3600)
+
+
+@asynccontextmanager
+async def sse_stream_hangs_server() -> AsyncIterator[str]:
+    """Servidor ASGI real (uvicorn) cujo `/mcp` sempre entrega headers 200 OK de uma sessao
+    Streamable HTTP e depois nunca escreve nenhum evento SSE (ver docstring do modulo,
+    AD-014).
+
+    O handler de request desta app fica preso em `asyncio.sleep(3600)` propositalmente -- um
+    shutdown gracioso do uvicorn esperaria essa request "terminar" antes de retornar, o que
+    nunca aconteceria. Mesmo padrao de tolerancia curta usado em `black_hole_server` abaixo:
+    sinaliza saida e da um prazo curto antes de seguir em frente de qualquer forma.
+    """
+    config = uvicorn.Config(_sse_hang_asgi_app, host="127.0.0.1", port=0, log_level="error")
+    server = uvicorn.Server(config)
+    serve_task = asyncio.create_task(server.serve())
+    try:
+        while not server.started:
+            await asyncio.sleep(0.01)
+        port = server.servers[0].sockets[0].getsockname()[1]
+        yield f"http://127.0.0.1:{port}/mcp"
+    finally:
+        server.should_exit = True
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(serve_task, timeout=0.5)
 
 
 async def _swallow(_reader: asyncio.StreamReader, _writer: asyncio.StreamWriter) -> None:

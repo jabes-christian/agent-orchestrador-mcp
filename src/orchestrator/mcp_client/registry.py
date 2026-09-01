@@ -6,6 +6,7 @@ Este módulo e `config/servers.yaml` são o único lugar autorizado a nomear um 
 específico, apenas consome a lista de ferramentas já resolvida.
 """
 
+import asyncio
 from pathlib import Path
 from typing import Literal, TypedDict
 
@@ -65,11 +66,13 @@ class McpRegistry:
                     "transport": "streamable_http",
                     "url": cfg.url,
                     "timeout": cfg.timeout,
-                    # O cliente MCP subjacente usa por padrão um timeout de *leitura* de 300s,
-                    # independentemente do `timeout` acima (que limita apenas connect/write/pool)
-                    # -- sem isso, um servidor que aceita a conexão mas nunca responde ficaria
-                    # travado por 5 minutos em vez de respeitar o `timeout` por servidor definido
-                    # em servers.yaml.
+                    # `sse_read_timeout` NÃO é suficiente sozinho (ver AD-014, STATE.md): contra
+                    # um backend Streamable HTTP real que entrega os headers (200 OK, sessão
+                    # aberta) mas nunca escreve o primeiro evento SSE, o SDK `mcp` subjacente não
+                    # aplica esse timeout de fato -- a leitura trava indefinidamente. Mantido aqui
+                    # como defesa em profundidade (funciona para outros modos de falha, ex.:
+                    # stream que já começou a entregar dados e depois para), mas o enforcement
+                    # real vem do `asyncio.wait_for` em `discover()`, abaixo.
                     "sse_read_timeout": cfg.timeout,
                 }
                 for cfg in server_configs
@@ -86,12 +89,22 @@ class McpRegistry:
         fica isolada àquele servidor -- ele é marcado como unhealthy e a descoberta continua com
         os demais (MCPO-02 AC2). Um servidor com `enabled: false` nunca é contatado e permanece
         unhealthy, com lista de ferramentas vazia.
+
+        `get_tools()` é envolvido em `asyncio.wait_for(..., timeout=cfg.timeout)` -- não confiar
+        só no `sse_read_timeout` do `MultiServerMCPClient` (ver AD-014, STATE.md). Encontrado
+        validando `docker compose up -d` de ponta a ponta contra o MCP server `filesystem` real
+        (T33): o handshake abre a sessão Streamable HTTP (200 OK, `mcp-session-id` presente) mas
+        o SDK `mcp` subjacente não interrompe a leitura sozinho se o primeiro evento SSE nunca
+        chegar -- sem este `wait_for`, `discover()` trava indefinidamente e o gateway nunca sai
+        de "Waiting for application startup", nenhum outro server chega a ser tentado.
         """
         for cfg in self._server_configs:
             if not cfg.enabled:
                 continue
             try:
-                tools = await self._client.get_tools(server_name=cfg.name)
+                tools = await asyncio.wait_for(
+                    self._client.get_tools(server_name=cfg.name), timeout=cfg.timeout
+                )
             except Exception:
                 self._healthy[cfg.name] = False
                 continue

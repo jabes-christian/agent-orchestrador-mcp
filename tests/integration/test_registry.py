@@ -4,11 +4,13 @@ Usa um servidor `fastmcp.FastMCP` real em uma porta efêmera (design.md Sec 6), 
 exercitar o transporte Streamable HTTP real de ponta a ponta.
 """
 
+import asyncio
+
 from fastmcp import FastMCP
 
 from orchestrator.mcp_client.registry import McpRegistry, ServerConfig
 
-from .mcp_test_server import black_hole_server, run_fake_mcp_server
+from .mcp_test_server import black_hole_server, run_fake_mcp_server, sse_stream_hangs_server
 
 
 def _make_success_server() -> FastMCP:
@@ -89,6 +91,23 @@ async def test_discover_marks_timed_out_server_unhealthy_without_aborting():
         )
 
         await registry.discover()  # não deve levantar exceção nem travar
+
+        servers = registry.servers()
+        assert servers[0]["status"] == "unhealthy"
+
+
+async def test_discover_marks_a_server_whose_sse_stream_never_responds_as_unhealthy():
+    """Regressão do AD-014 (STATE.md): um server que entrega os headers HTTP de uma sessão
+    Streamable HTTP válida (200 OK, `mcp-session-id`) mas nunca escreve o primeiro evento SSE
+    -- diferente de `black_hole_server` (que nunca responde nada). `sse_read_timeout` do
+    `MultiServerMCPClient` sozinho não interrompe essa leitura; sem o `asyncio.wait_for`
+    explícito em `discover()`, este teste travaria indefinidamente."""
+    async with sse_stream_hangs_server() as url:
+        registry = McpRegistry(
+            [ServerConfig(name="filesystem", transport="streamable_http", url=url, timeout=0.5)]
+        )
+
+        await asyncio.wait_for(registry.discover(), timeout=5)  # não deve travar
 
         servers = registry.servers()
         assert servers[0]["status"] == "unhealthy"
