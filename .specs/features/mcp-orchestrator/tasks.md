@@ -1092,11 +1092,23 @@ primeiro stage; contexto de build mudou para a raiz do repo (`.`).
 > pytest (em vez de só bater via HTTP no gateway), reavaliar: no máximo 1 teste por arquivo pode
 > invocar uma tool MCP real nesse cenário.
 
+**Nota de validação (decisão do usuário)**: este gate exige `OPENROUTER_API_KEY` e
+`GITHUB_PERSONAL_ACCESS_TOKEN` **reais** (o script faz `POST /tasks` de verdade, chamada real
+ao LLM + ao GitHub) — diferente de toda validação anterior deste lote, que usou só
+credenciais fake. O usuário optou por **não** fornecer credenciais reais nesta sessão; o gate
+`e2e` completo (3º item abaixo) fica formalmente **não executado com sucesso**, consistente
+com design.md marcar este gate como "fora do gate padrão de PR". Validado sem credenciais
+reais: (1) `ruff check`/`ruff format --check` limpos; (2) o script, rodado contra a stack real
+(`docker compose up -d`) com credenciais **fake**, corretamente detecta e reporta falha
+(`HTTP 504`/`REQUEST_TIMEOUT` de ambos os casos, mensagens `FAIL:` em stderr, exit code 1);
+(3) a lógica de `_run_case` (sucesso quando `used_tools` contém a tool esperada, falha quando
+não contém) verificada isoladamente com respostas HTTP sintéticas nos dois caminhos.
+
 **Done when**:
 
-- [ ] Existe pelo menos 1 caso de smoke test por MCP server declarado (`filesystem`, `github`)
-- [ ] O script sobe a stack, roda os casos e falha com saída não-zero se algum caso falhar
-- [ ] Gate check passa: `docker compose up -d && python scripts/smoke_test.py && python -m pytest tests/e2e -q -m e2e`
+- [x] Existe pelo menos 1 caso de smoke test por MCP server declarado (`filesystem`, `github`)
+- [x] O script roda os casos contra a stack já subida e falha com saída não-zero se algum caso falhar (a subida da stack em si é feita pelo Gate Check Command, `docker compose up -d`, antes do script — design.md: "scripts/smoke_test.py # E2E pós-`docker compose up`")
+- [ ] Gate check completo com credenciais reais: `docker compose up -d && python scripts/smoke_test.py && python -m pytest tests/e2e -q -m e2e` — **não executado nesta sessão** (decisão do usuário, ver nota de validação acima); `tests/e2e/` também não existe ainda (fora do escopo granular desta task, que é só `scripts/smoke_test.py`)
 
 **Tests**: e2e
 **Gate**: e2e
