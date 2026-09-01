@@ -2,15 +2,29 @@
 
 Usa um servidor `fastmcp.FastMCP` real em uma porta efêmera (design.md Sec 6), não um mock, para
 exercitar o transporte Streamable HTTP real de ponta a ponta.
+
+O teste de retry (`test_discover_retries_once_and_recovers_from_a_flaky_first_attempt`) roda
+em um SUBPROCESSO isolado (`registry_retry_check.py`), não neste processo pytest -- ver AD-015
+em `STATE.md`. Envolve uma conexão MCP real cancelada em pleno voo (a 1ª tentativa,
+forçadamente interrompida pelo timeout), um padrão de poluição de processo mais forte que o do
+AD-011: mesmo como o último teste deste arquivo, corrompeu testes de OUTROS arquivos de
+integração rodando depois no mesmo processo.
 """
 
 import asyncio
+import os
+import subprocess
+import sys
+from pathlib import Path
 
 from fastmcp import FastMCP
 
 from orchestrator.mcp_client.registry import McpRegistry, ServerConfig
 
 from .mcp_test_server import black_hole_server, run_fake_mcp_server, sse_stream_hangs_server
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_RETRY_CHECK_SCRIPT = Path(__file__).parent / "registry_retry_check.py"
 
 
 def _make_success_server() -> FastMCP:
@@ -143,3 +157,22 @@ async def test_get_tools_returns_all_discovered_tools():
         tools = await registry.get_tools()
 
         assert any(t.name == "read_file" for t in tools)
+
+
+def test_discover_retries_once_and_recovers_from_a_flaky_first_attempt() -> None:
+    """Regressão do AD-015 (STATE.md): a 1ª tentativa de `discover()` trava (corrida de
+    largada entre o healthcheck TCP do compose e o subprocesso stdio interno ainda não estar
+    pronto), mas o server está genuinamente saudável a partir da 2ª. Sem o retry em
+    `_discover_one`, o subprocesso (`registry_retry_check.py`) sai com código != 0 -- ver
+    docstring do módulo para o motivo do isolamento em subprocesso."""
+    result = subprocess.run(
+        [sys.executable, str(_RETRY_CHECK_SCRIPT)],
+        cwd=_REPO_ROOT,
+        env={**os.environ, "PYTHONPATH": f"{_REPO_ROOT}{os.pathsep}{_REPO_ROOT / 'tests'}"},
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "ok"

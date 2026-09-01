@@ -338,6 +338,21 @@ falhar rápido antes por credenciais inválidas). Corrigido envolvendo a chamada
 `asyncio.wait_for(..., timeout=cfg.timeout)`. Nenhum teste anterior pegava isso porque todos
 usam `fastmcp.FastMCP` em processo (resposta instantânea, nunca exercita esse timeout).
 
+**Corrigido retroativamente uma segunda vez, ainda em T33 (Lote 4) — ver AD-015, `STATE.md`**:
+depois do fix acima, revalidação manual de `docker compose up -d` (feita pelo usuário)
+encontrou `mcp-filesystem` ainda `unhealthy` mesmo com o startup completando dentro do
+`cfg.timeout` configurado — os logs do server mostravam uma troca aparentemente
+bem-sucedida, sem evidência de falha real. Causa raiz DIFERENTE do AD-014: uma corrida de
+largada entre o healthcheck TCP do compose (marca o container `healthy` assim que o shim
+aceita conexão) e o subprocesso stdio interno ainda não ter terminado de inicializar — a 1ª
+tentativa de `discover()` logo após o container subir trava até `cfg.timeout`; a partir da 2ª,
+sucesso instantâneo e consistente (confirmado 5/5 em múltiplas rodadas contra o container
+real). Corrigido com 1 retry por server em `discover()` (`_discover_one`,
+`_DISCOVER_RETRY_DELAY_S=1.0`), mesmo padrão de retry único já usado em `graph.nodes.tools`
+(T21). Trade-off aceito (decisão do usuário): quando a corrida acontece, o pior caso ainda
+leva até `cfg.timeout` completo antes do retry entrar — validado repetidamente contra a stack
+real, sempre convergindo para `healthy`, só com essa latência ocasional.
+
 **Where**: `src/orchestrator/mcp_client/registry.py`
 **Depends on**: T3, T6, T7
 **Reuses**: `Settings` (T3), `config/servers.yaml` (T6), hierarquia de exceções (T7)
@@ -356,11 +371,13 @@ usam `fastmcp.FastMCP` em processo (resposta instantânea, nunca exercita esse t
 - [x] Gate check passa: `python -m pytest tests/integration -q`
 - [x] Test count: testes de integração contra um server MCP falso real cobrindo sucesso, server fora do ar e timeout passam
 - [x] **(AD-014, retroativo)** `discover()` não trava indefinidamente contra um server cuja sessão Streamable HTTP abre mas nunca entrega o primeiro evento SSE — coberto por `tests/integration/test_registry.py::test_discover_marks_a_server_whose_sse_stream_never_responds_as_unhealthy` (fixture `sse_stream_hangs_server`, `tests/integration/mcp_test_server.py`); confirmado como regressão real: revertendo o `asyncio.wait_for`, o teste falha (trava além do limite do próprio teste) em vez de passar vacuamente
+- [x] **(AD-015, retroativo)** `discover()` não marca `unhealthy` um server genuinamente saudável cuja 1ª tentativa apenas colidiu com a janela de corrida do startup — coberto por `tests/integration/test_registry.py::test_discover_retries_once_and_recovers_from_a_flaky_first_attempt` (fixture `flaky_first_attempt_server`, `tests/integration/mcp_test_server.py`); roda em SUBPROCESSO isolado (`tests/integration/registry_retry_check.py`, ver AD-016) — confirmado como regressão real revertendo o retry: o subprocesso sai com código != 0 em vez de passar vacuamente
 
 **Tests**: integration
 **Gate**: full
 **Commit (original, T8)**: `feat(mcp-client): adicionar registry de servers mcp`
-**Commit (correção retroativa, AD-014, aplicada durante T33)**: `fix(mcp-client): adicionar timeout explicito a discover() contra sse stream que nunca responde`
+**Commit (correção retroativa #1, AD-014, aplicada durante T33)**: `fix(mcp-client): adicionar timeout explicito a discover() contra sse stream que nunca responde`
+**Commit (correção retroativa #2, AD-015, aplicada durante T33)**: `fix(mcp-client): adicionar retry a discover() contra corrida de largada no startup do backend stdio`
 
 ---
 

@@ -12,6 +12,14 @@ responde nada, nem os headers), aqui o handshake HTTP começa normalmente e é e
 corpo da stream SSE que nunca chega, o cenário em que `sse_read_timeout` sozinho se mostrou
 insuficiente.
 
+`flaky_first_attempt_server` envolve um `fastmcp.FastMCP` real (como `run_fake_mcp_server`),
+mas a PRIMEIRA requisição HTTP que chega trava para sempre (mesmo comportamento de
+`sse_stream_hangs_server`); a partir da segunda requisição em diante, delega normalmente para
+o `FastMCP` real. Reproduz a corrida de largada do AD-015 (STATE.md): o healthcheck TCP do
+compose marca um MCP server `healthy` assim que o shim aceita conexão, mas o subprocesso
+stdio interno pode não estar pronto ainda -- a 1ª tentativa de `discover()` trava, a 2ª
+(retry) sucede normalmente.
+
 `NeverInvokedChatModel` é o dublê padrão para `orchestrator.main.create_app(model=...)` em
 QUALQUER teste que não exercite `POST /tasks` de propósito (ex.: `test_main.py`,
 `test_routes_servers.py`) -- ver AD-010 em `STATE.md`: construir um `ChatOpenRouter` real
@@ -91,6 +99,38 @@ async def sse_stream_hangs_server() -> AsyncIterator[str]:
     sinaliza saida e da um prazo curto antes de seguir em frente de qualquer forma.
     """
     config = uvicorn.Config(_sse_hang_asgi_app, host="127.0.0.1", port=0, log_level="error")
+    server = uvicorn.Server(config)
+    serve_task = asyncio.create_task(server.serve())
+    try:
+        while not server.started:
+            await asyncio.sleep(0.01)
+        port = server.servers[0].sockets[0].getsockname()[1]
+        yield f"http://127.0.0.1:{port}/mcp"
+    finally:
+        server.should_exit = True
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(serve_task, timeout=0.5)
+
+
+@asynccontextmanager
+async def flaky_first_attempt_server(mcp: FastMCP) -> AsyncIterator[str]:
+    """Servidor Streamable HTTP real cuja primeira requisição HTTP trava para sempre; a
+    partir da segunda, delega normalmente para `mcp` (ver docstring do módulo, AD-015)."""
+    real_app = mcp.http_app(path="/mcp")
+    call_count = 0
+
+    async def flaky_app(scope: dict, receive: object, send: object) -> None:
+        nonlocal call_count
+        if scope["type"] != "http":
+            await real_app(scope, receive, send)
+            return
+        call_count += 1
+        if call_count == 1:
+            await _sse_hang_asgi_app(scope, receive, send)
+            return
+        await real_app(scope, receive, send)
+
+    config = uvicorn.Config(flaky_app, host="127.0.0.1", port=0, log_level="error", lifespan="on")
     server = uvicorn.Server(config)
     serve_task = asyncio.create_task(server.serve())
     try:

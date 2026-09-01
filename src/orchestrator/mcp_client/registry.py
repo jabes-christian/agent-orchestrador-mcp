@@ -17,6 +17,13 @@ from pydantic import BaseModel
 
 DEFAULT_SERVERS_CONFIG_PATH = Path("config/servers.yaml")
 
+# Espera entre a 1a e a 2a tentativa de discover() por server (AD-015, STATE.md) -- calibrada
+# pela janela de corrida observada empiricamente entre o healthcheck TCP do compose (que so
+# verifica se o shim aceita conexao) e o subprocesso stdio interno terminar de subir: a 1a
+# tentativa logo apos o container ficar "healthy" trava ate o timeout; a partir de ~2s depois,
+# sucesso instantaneo e consistente.
+_DISCOVER_RETRY_DELAY_S = 1.0
+
 
 class ServerConfig(BaseModel):
     """Uma entrada de `config/servers.yaml`."""
@@ -97,19 +104,40 @@ class McpRegistry:
         o SDK `mcp` subjacente não interrompe a leitura sozinho se o primeiro evento SSE nunca
         chegar -- sem este `wait_for`, `discover()` trava indefinidamente e o gateway nunca sai
         de "Waiting for application startup", nenhum outro server chega a ser tentado.
+
+        1 retry por server, com `_DISCOVER_RETRY_DELAY_S` de espera entre as tentativas (ver
+        AD-015, STATE.md, mesmo padrão de retry único de `graph.nodes.tools`/T21). Motivo: o
+        healthcheck TCP do compose (design.md Seção 5 -- "só verifica se o shim aceita
+        conexão") marca um MCP server `healthy` assim que o shim sobe, mas o subprocesso stdio
+        interno pode ainda não ter terminado de inicializar -- a 1ª tentativa de `discover()`
+        logo depois do container ficar `healthy` pode acertar essa janela de corrida e travar
+        até `cfg.timeout`, mesmo que o server esteja genuinamente saudável segundos depois.
+        Confirmado empiricamente contra `mcp-filesystem` real: a 1ª tentativa após um restart
+        trava; a partir da 2ª (retry), sucesso instantâneo e consistente.
         """
         for cfg in self._server_configs:
             if not cfg.enabled:
                 continue
             try:
-                tools = await asyncio.wait_for(
-                    self._client.get_tools(server_name=cfg.name), timeout=cfg.timeout
-                )
+                tools = await self._discover_one(cfg)
             except Exception:
                 self._healthy[cfg.name] = False
                 continue
             self._tools_by_server[cfg.name] = tools
             self._healthy[cfg.name] = True
+
+    async def _discover_one(self, cfg: ServerConfig) -> list[BaseTool]:
+        """`get_tools()` para um único server, com 1 retry após falha (ver docstring de
+        `discover()`, AD-015)."""
+        try:
+            return await asyncio.wait_for(
+                self._client.get_tools(server_name=cfg.name), timeout=cfg.timeout
+            )
+        except Exception:
+            await asyncio.sleep(_DISCOVER_RETRY_DELAY_S)
+            return await asyncio.wait_for(
+                self._client.get_tools(server_name=cfg.name), timeout=cfg.timeout
+            )
 
     def servers(self) -> list[ServerInfo]:
         """Estado atual da descoberta, para `GET /servers` (MCPO-02 AC3)."""
