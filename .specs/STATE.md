@@ -79,8 +79,9 @@ certificado servido (`openssl s_client -connect <host>:443 -servername <host> | 
 ## Handoff
 
 **Feature ativa:** `mcp-orchestrator`
-**Fase concluída:** Tasks (Fase 4 de 5 do `tlc-spec-driven`)
-**Branch:** `docs/tasks-mcp-orchestrator`
-**Artefatos desta fase:** `.specs/features/mcp-orchestrator/tasks.md` (novo — 36 tasks em 8 fases, Test Coverage Matrix, Gate Check Commands, diagramas por fase, 3 tabelas de checagem pré-aprovação); `.specs/features/mcp-orchestrator/spec.md` (emendado — tabela de Requirement Traceability ganhou coluna `Tasks`, MCPO-01..MCPO-11 em `In Tasks`, MCPO-12 em `Deferred`); `.specs/STATE.md` (este arquivo — AD-006 registrado).
-**Próximo passo:** aguardar validação do usuário sobre `tasks.md`; ao aprovar, seguir para Fase 5 (Execute) com a oferta de sub-agentes em 5 lotes (F1+F2 · F3+F4 · F5 · F6+F7 · F8).
-**Pendências levadas à Fase 5:** T1 confirma na prática o caminho exato do binário dentro da imagem `ghcr.io/github/github-mcp-server` antes de T30 depender dele; regravação de fixtures de avaliação (T36) é obrigatória sempre que `graph/prompts.py` mudar (AD-004).
+**Fase em andamento:** Execute (Fase 5 de 5 do `tlc-spec-driven`) — Lote 5 (final), Fase 8 do plano de tasks
+**Branch:** `feat/mcp-orchestrator`
+**Completo:** T1-T35 (36 tasks totais; só T36 resta). T35 (`tests/eval/dataset.json`, 15 casos rotulados) commitada e pushada — ver AD-017 para o desvio de schema (`expected_server`/`expected_tool` em `list[str]` uniforme, não campos singulares como `design.md` §6.1 mostra).
+**Bloqueado:** T36 (`tests/eval/test_routing.py`) está formalmente **pausada, não implementada** — decisão do usuário (2026-09-01). `design.md` §6.1/AD-004 exigem que `tests/eval/fixtures/<id>.json` seja gravado a partir de uma chamada REAL ao modelo OpenRouter; **EN-001** (acima, nesta seção) confirma que a rede desta máquina bloqueia toda chamada HTTPS a `openrouter.ai` via interceptação TLS corporativa (Netskope) — não é possível gravar fixtures reais nesta sessão/rede. Nenhum código ou dado de T36 foi escrito (nem fixtures fabricadas à mão) para evitar produzir um artefato que pareça uma gravação real e não é.
+**Próximo passo:** quando o usuário tiver acesso a uma rede sem a interceptação do EN-001 (fora desta VPN/rede corporativa), retomar T36: implementar `tests/eval/test_routing.py`, gravar `tests/eval/fixtures/<id>.json` a partir de chamadas reais ao OpenRouter (uma por caso de `tests/eval/dataset.json`), então rodar a suíte em modo CI (offline, replay das fixtures) com gate de acurácia ≥ 90%. Isso encerra a Fase 5 (Execute) e aciona o Verifier (author ≠ verifier) automaticamente como último passo.
+**Pendências:** T1 já confirmou o caminho do binário do github-mcp-server (usado por T30); T36 é a única pendência restante da feature, bloqueada por EN-001, não por decisão de arquitetura.
