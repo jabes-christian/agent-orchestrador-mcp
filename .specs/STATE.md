@@ -67,14 +67,33 @@ O loop de retry embutido no SDK `openrouter` (`retry_connection_errors=True`) cl
 nunca vai funcionar, até `asyncio.timeout(REQUEST_TIMEOUT_S)` em `routes_tasks.py` cortar em
 120s -- daí o sintoma de "trava" em vez de falha imediata e visível.
 
+**Teste adicional (2026-09-01) -- o bloqueio sobrevive à correção de certificado.** O usuário
+testou instalar o pacote `truststore` (só no `.venv` local da máquina, nunca adicionado como
+dependência do projeto) e chamar `truststore.inject_into_ssl()`, que delega a verificação de
+certificado ao cert store do Windows -- o mesmo caminho que o `curl` já usava (via Schannel),
+em vez do bundle `certifi` que o `ssl` do Python usa por padrão. Resultado: o
+`CERTIFICATE_VERIFY_FAILED` desaparece -- o handshake TLS passa a ser aceito. Mas isso revelou
+uma SEGUNDA camada de bloqueio, independente da primeira: a requisição chega a ser enviada,
+porém a resposta nunca retorna, mesmo com timeout de 60s (`httpx.ReadTimeout`). Ou seja, a
+Netskope não só reassina o certificado (primeira camada, contornável do lado do cliente) -- ela
+também bloqueia ou nunca completa a resposta da chamada a `openrouter.ai` nesta rede/máquina
+(segunda camada, não contornável do lado do cliente), consistente com política de segurança
+corporativa intencional (bloqueio a serviços de IA externos não aprovados), não com um bug de
+configuração de certificado.
+
 **Decisão do usuário (2026-09-01):** nenhum workaround entra no código do repositório -- é
-uma condição de rede/ambiente (proxy corporativo de inspeção TLS), não algo que
-`llm/provider.py` deva contornar (o mesmo container se comporta de forma diferente fora desta
-rede/VPN; um workaround aqui não deveria viver em código que também roda em CI/produção fora
-dela). Antes de investigar qualquer timeout futuro de chamada HTTPS de saída (OpenRouter ou
-qualquer outro serviço externo) como bug de aplicação, verificar primeiro o emissor do
-certificado servido (`openssl s_client -connect <host>:443 -servername <host> | openssl x509
--noout -issuer`) -- se for `*.goskope.com`, é isto, não regressão de código.
+uma condição de rede/ambiente (proxy corporativo de inspeção TLS + bloqueio de resposta), não
+algo que `llm/provider.py` deva contornar (o mesmo container se comporta de forma diferente
+fora desta rede/VPN; um workaround aqui não deveria viver em código que também roda em
+CI/produção fora dela). O usuário não vai investir mais tempo tentando contornar isso do lado
+do cliente -- `truststore` já eliminou a causa mais óbvia (certificado) e o bloqueio persistiu.
+O caminho realista daqui é operacional, não técnico: rodar de uma máquina/rede sem o agente
+Netskope, ou obter uma exceção de política de TI para o domínio `openrouter.ai`. Antes de
+investigar qualquer timeout futuro de chamada HTTPS de saída (OpenRouter ou qualquer outro
+serviço externo) como bug de aplicação, verificar primeiro o emissor do certificado servido
+(`openssl s_client -connect <host>:443 -servername <host> | openssl x509 -noout -issuer`) -- se
+for `*.goskope.com`, checar também se a resposta HTTP de fato retorna (não só o handshake TLS)
+antes de descartar isto como já resolvido.
 
 ## Handoff
 
